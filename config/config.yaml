@@ -24,28 +24,10 @@ app:
 # name: 显示名称（可自定义，修改后不影响运行）
 # ===============================================================
 platforms:
-  - id: "toutiao"
-    name: "今日头条"
-  - id: "baidu"
-    name: "百度热搜"
   - id: "wallstreetcn-hot"
     name: "华尔街见闻"
-  - id: "thepaper"
-    name: "澎湃新闻"
-  - id: "bilibili-hot-search"
-    name: "bilibili 热搜"
   - id: "cls-hot"
     name: "财联社热门"
-  - id: "ifeng"
-    name: "凤凰网"
-  - id: "tieba"
-    name: "贴吧"
-  - id: "weibo"
-    name: "微博"
-  - id: "douyin"
-    name: "抖音"
-  - id: "zhihu"
-    name: "知乎"
 
 
 # ===============================================================
@@ -80,15 +62,15 @@ rss:
   # - 正整数：覆盖全局设置，只推送此天数内的文章
   # - 0：禁用此频道的新鲜度过滤，推送所有文章
   feeds:
-    - id: "hacker-news"
-      name: "Hacker News"
-      url: "https://hnrss.org/frontpage"
-      # max_age_days: 1               # 示例：只推送1天内的文章
+    - id: "google-news-ai"
+      name: "Google News - 人工智能"
+      url: "https://news.google.com/rss/search?q=人工智能&hl=zh-CN&gl=CN&ceid=CN:zh-Hans"
+      max_age_days: 1
 
-    - id: "ruanyifeng"
-      name: "阮一峰的网络日志"
-      url: "http://www.ruanyifeng.com/blog/atom.xml"
-      # max_age_days: 7               # 示例：推送7天内的文章（更新较慢的博客）
+    - id: "google-news-tech"
+      name: "Google News - 科技趋势"
+      url: "https://news.google.com/rss/search?q=科技趋势&hl=zh-CN&gl=CN&ceid=CN:zh-Hans"
+      max_age_days: 1
     
     - id: "yahoo-finance"
       name: "雅虎财经"
@@ -222,7 +204,7 @@ storage:
   # 本地存储配置
   local:
     data_dir: "output"                # 数据目录
-    retention_days: 0                 # 保留天数（0=永久保留）
+    retention_days: 7                 # 保留天数（0=永久保留）
 
   # 远程存储配置（S3 兼容协议）
   # 支持: Cloudflare R2, 阿里云 OSS, 腾讯云 COS, AWS S3, MinIO 等
@@ -251,7 +233,7 @@ storage:
 # ===============================================================
 advanced:
   # 版本检查
-  version_check_url: "https://raw.githubusercontent.com/sansan0/TrendRadar/refs/heads/master/version"
+  version_check_url: "https://raw.githubusercontent.com/MisonL/TrendRadar/refs/heads/master/version"
 
   # 爬虫设置
   crawler:

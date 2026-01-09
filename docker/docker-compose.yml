@@ -1,11 +1,14 @@
 services:
   trendradar:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     image: wantcat/trendradar:latest
     container_name: trendradar
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:${WEBSERVER_PORT:-8080}:${WEBSERVER_PORT:-8080}"
+      - "33888:${WEBSERVER_PORT:-33888}"
 
     volumes:
       - ../config:/app/config:ro
@@ -28,6 +31,9 @@ services:
       - DINGTALK_WEBHOOK_URL=${DINGTALK_WEBHOOK_URL:-}
       - WEWORK_WEBHOOK_URL=${WEWORK_WEBHOOK_URL:-}
       - WEWORK_MSG_TYPE=${WEWORK_MSG_TYPE:-}
+      - WEB_URL=${WEB_URL:-}
+      - MAX_NOTIFY_NEWS=${MAX_NOTIFY_NEWS:-}
+      - REPORT_TITLE=${REPORT_TITLE:-}
       # 邮件配置
       - EMAIL_FROM=${EMAIL_FROM:-}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}

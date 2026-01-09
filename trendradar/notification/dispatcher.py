@@ -264,6 +264,7 @@ class NotificationDispatcher:
                 batch_size=self.config.get("MESSAGE_BATCH_SIZE", 4000),
                 batch_interval=self.config.get("BATCH_SEND_INTERVAL", 1.0),
                 msg_type=self.config.get("WEWORK_MSG_TYPE", "markdown"),
+                web_url=self.config.get("WEB_URL", ""),
                 split_content_func=self.split_content_func,
                 rss_items=rss_items,
                 rss_new_items=rss_new_items,

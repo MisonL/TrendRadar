@@ -35,6 +35,8 @@ def split_content_into_batches(
     rss_new_items: Optional[list] = None,
     timezone: str = "Asia/Shanghai",
     display_mode: str = "keyword",
+    max_notify_news: int = 5,
+    web_url: str = "",
 ) -> List[str]:
     """分批处理消息内容，确保词组标题+至少第一条新闻的完整性（支持热榜+RSS合并）
 
@@ -97,28 +99,39 @@ def split_content_into_batches(
         base_header = f"*总新闻数：* {total_titles}\n\n"
 
     base_footer = ""
+    if web_url:
+        if format_type == "telegram":
+            view_more_link = f"\n\n🔗 <a href='{web_url}'>查看完整报告</a>"
+        elif format_type == "slack":
+            view_more_link = f"\n\n🔗 <{web_url}|查看完整报告>"
+        elif format_type in ("feishu", "dingtalk", "wework", "ntfy", "bark"):
+            view_more_link = f"\n\n🔗 [查看完整报告]({web_url})"
+        else:
+            view_more_link = f"\n\n🔗 查看完整报告：{web_url}"
+        base_footer += view_more_link
+
     if format_type in ("wework", "bark"):
-        base_footer = f"\n\n\n> 更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}"
+        base_footer += f"\n\n\n> 更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}"
         if update_info:
             base_footer += f"\n> TrendRadar 发现新版本 **{update_info['remote_version']}**，当前 **{update_info['current_version']}**"
     elif format_type == "telegram":
-        base_footer = f"\n\n更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}"
+        base_footer += f"\n\n更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}"
         if update_info:
             base_footer += f"\nTrendRadar 发现新版本 {update_info['remote_version']}，当前 {update_info['current_version']}"
     elif format_type == "ntfy":
-        base_footer = f"\n\n> 更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}"
+        base_footer += f"\n\n> 更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}"
         if update_info:
             base_footer += f"\n> TrendRadar 发现新版本 **{update_info['remote_version']}**，当前 **{update_info['current_version']}**"
     elif format_type == "feishu":
-        base_footer = f"\n\n<font color='grey'>更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}</font>"
+        base_footer += f"\n\n<font color='grey'>更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}</font>"
         if update_info:
             base_footer += f"\n<font color='grey'>TrendRadar 发现新版本 {update_info['remote_version']}，当前 {update_info['current_version']}</font>"
     elif format_type == "dingtalk":
-        base_footer = f"\n\n> 更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}"
+        base_footer += f"\n\n> 更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}"
         if update_info:
             base_footer += f"\n> TrendRadar 发现新版本 **{update_info['remote_version']}**，当前 **{update_info['current_version']}**"
     elif format_type == "slack":
-        base_footer = f"\n\n_更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}_"
+        base_footer += f"\n\n_更新时间：{now.strftime('%Y-%m-%d %H:%M:%S')}_"
         if update_info:
             base_footer += f"\n_TrendRadar 发现新版本 *{update_info['remote_version']}*，当前 *{update_info['current_version']}_"
 
@@ -158,11 +171,15 @@ def split_content_into_batches(
         batches.append(final_content)
         return batches
 
+    # 全局新闻计数器，用于严格限制推送的总量
+    added_news_count = 0
+
     # 定义处理热点词汇统计的函数
     def process_stats_section(current_batch, current_batch_has_content, batches):
         """处理热点词汇统计"""
-        if not report_data["stats"]:
-            return current_batch, current_batch_has_content, batches
+        nonlocal added_news_count
+        if not report_data["stats"] or (max_notify_news > 0 and added_news_count >= max_notify_news):
+            return current_batch, current_batch_has_content, batches, added_news_count
 
         total_count = len(report_data["stats"])
 
@@ -185,6 +202,20 @@ def split_content_into_batches(
             word = stat["word"]
             count = stat["count"]
             sequence_display = f"[{i + 1}/{total_count}]"
+            
+            # 限制针对当前关键词推送的新闻条目
+            original_titles = stat["titles"]
+            notify_titles = original_titles
+            
+            # 计算当前还可以添加多少条新闻
+            if max_notify_news > 0:
+                remaining_slots = max_notify_news - added_news_count
+                if remaining_slots <= 0:
+                    break  # 已经达到全局上限，停止处理后续关键词
+                
+                # 当前关键词下的新闻数也不能超过限制
+                limit = min(len(original_titles), remaining_slots)
+                notify_titles = original_titles[:limit]
 
             # 构建词组标题
             word_header = ""
@@ -252,8 +283,8 @@ def split_content_into_batches(
             show_source = display_mode == "keyword"
             show_keyword = display_mode == "platform"
             first_news_line = ""
-            if stat["titles"]:
-                first_title_data = stat["titles"][0]
+            if notify_titles:
+                first_title_data = notify_titles[0]
                 if format_type in ("wework", "bark"):
                     formatted_title = format_title_for_platform(
                         "wework", first_title_data, show_source=show_source, show_keyword=show_keyword
@@ -282,7 +313,7 @@ def split_content_into_batches(
                     formatted_title = f"{first_title_data['title']}"
 
                 first_news_line = f"  1. {formatted_title}\n"
-                if len(stat["titles"]) > 1:
+                if len(notify_titles) > 1:
                     first_news_line += "\n"
 
             # 原子性检查：词组标题+第一条新闻必须一起处理
@@ -298,15 +329,17 @@ def split_content_into_batches(
                     batches.append(current_batch + base_footer)
                 current_batch = base_header + stats_header + word_with_first_news
                 current_batch_has_content = True
+                added_news_count += 1
                 start_index = 1
             else:
                 current_batch = test_content
                 current_batch_has_content = True
+                added_news_count += 1  # 计数增加
                 start_index = 1
 
             # 处理剩余新闻条目
-            for j in range(start_index, len(stat["titles"])):
-                title_data = stat["titles"][j]
+            for j in range(start_index, len(notify_titles)):
+                title_data = notify_titles[j]
                 if format_type in ("wework", "bark"):
                     formatted_title = format_title_for_platform(
                         "wework", title_data, show_source=show_source, show_keyword=show_keyword
@@ -335,7 +368,7 @@ def split_content_into_batches(
                     formatted_title = f"{title_data['title']}"
 
                 news_line = f"  {j + 1}. {formatted_title}\n"
-                if j < len(stat["titles"]) - 1:
+                if j < len(notify_titles) - 1:
                     news_line += "\n"
 
                 test_content = current_batch + news_line
@@ -347,9 +380,11 @@ def split_content_into_batches(
                         batches.append(current_batch + base_footer)
                     current_batch = base_header + stats_header + word_header + news_line
                     current_batch_has_content = True
+                    added_news_count += 1
                 else:
                     current_batch = test_content
                     current_batch_has_content = True
+                    added_news_count += 1  # 计数增加
 
             # 词组间分隔符
             if i < len(report_data["stats"]) - 1:
@@ -374,13 +409,14 @@ def split_content_into_batches(
                 ):
                     current_batch = test_content
 
-        return current_batch, current_batch_has_content, batches
+        return current_batch, current_batch_has_content, batches, added_news_count
 
     # 定义处理新增新闻的函数
     def process_new_titles_section(current_batch, current_batch_has_content, batches):
         """处理新增新闻"""
-        if not report_data["new_titles"]:
-            return current_batch, current_batch_has_content, batches
+        nonlocal added_news_count
+        if not report_data["new_titles"] or (max_notify_news > 0 and added_news_count >= max_notify_news):
+            return current_batch, current_batch_has_content, batches, added_news_count
 
         new_header = ""
         if format_type in ("wework", "bark"):
@@ -411,26 +447,37 @@ def split_content_into_batches(
             current_batch = test_content
             current_batch_has_content = True
 
-        # 逐个处理新增新闻来源
         for source_data in report_data["new_titles"]:
+            # 限制推送的新闻条数
+            original_titles = source_data["titles"]
+            notify_titles = original_titles
+            
+            # 全局限制检查
+            if max_notify_news > 0:
+                remaining_slots = max_notify_news - added_news_count
+                if remaining_slots <= 0:
+                    break
+                limit = min(len(original_titles), remaining_slots)
+                notify_titles = original_titles[:limit]
+
             source_header = ""
             if format_type in ("wework", "bark"):
-                source_header = f"**{source_data['source_name']}** ({len(source_data['titles'])} 条):\n\n"
+                source_header = f"**{source_data['source_name']}** ({len(original_titles)} 条):\n\n"
             elif format_type == "telegram":
-                source_header = f"{source_data['source_name']} ({len(source_data['titles'])} 条):\n\n"
+                source_header = f"{source_data['source_name']} ({len(original_titles)} 条):\n\n"
             elif format_type == "ntfy":
-                source_header = f"**{source_data['source_name']}** ({len(source_data['titles'])} 条):\n\n"
+                source_header = f"**{source_data['source_name']}** ({len(original_titles)} 条):\n\n"
             elif format_type == "feishu":
-                source_header = f"**{source_data['source_name']}** ({len(source_data['titles'])} 条):\n\n"
+                source_header = f"**{source_data['source_name']}** ({len(original_titles)} 条):\n\n"
             elif format_type == "dingtalk":
-                source_header = f"**{source_data['source_name']}** ({len(source_data['titles'])} 条):\n\n"
+                source_header = f"**{source_data['source_name']}** ({len(original_titles)} 条):\n\n"
             elif format_type == "slack":
-                source_header = f"*{source_data['source_name']}* ({len(source_data['titles'])} 条):\n\n"
+                source_header = f"*{source_data['source_name']}* ({len(original_titles)} 条):\n\n"
 
             # 构建第一条新增新闻
             first_news_line = ""
-            if source_data["titles"]:
-                first_title_data = source_data["titles"][0]
+            if notify_titles:
+                first_title_data = notify_titles[0]
                 title_data_copy = first_title_data.copy()
                 title_data_copy["is_new"] = False
 
@@ -471,15 +518,17 @@ def split_content_into_batches(
                     batches.append(current_batch + base_footer)
                 current_batch = base_header + new_header + source_with_first_news
                 current_batch_has_content = True
+                added_news_count += 1
                 start_index = 1
             else:
                 current_batch = test_content
                 current_batch_has_content = True
+                added_news_count += 1
                 start_index = 1
 
             # 处理剩余新增新闻
-            for j in range(start_index, len(source_data["titles"])):
-                title_data = source_data["titles"][j]
+            for j in range(start_index, len(notify_titles)):
+                title_data = notify_titles[j]
                 title_data_copy = title_data.copy()
                 title_data_copy["is_new"] = False
 
@@ -523,52 +572,52 @@ def split_content_into_batches(
 
             current_batch += "\n"
 
-        return current_batch, current_batch_has_content, batches
+        return current_batch, current_batch_has_content, batches, added_news_count
 
     # 根据配置决定处理顺序
     if reverse_content_order:
         # 新增热点在前，热点词汇统计在后
         # 1. 处理热榜新增
-        current_batch, current_batch_has_content, batches = process_new_titles_section(
+        current_batch, current_batch_has_content, batches, added_news_count = process_new_titles_section(
             current_batch, current_batch_has_content, batches
         )
         # 2. 处理 RSS 新增（如果有）
         if rss_new_items:
-            current_batch, current_batch_has_content, batches = _process_rss_new_titles_section(
+            current_batch, current_batch_has_content, batches, added_news_count = _process_rss_new_titles_section(
                 rss_new_items, format_type, feishu_separator, base_header, base_footer,
-                max_bytes, current_batch, current_batch_has_content, batches, timezone
+                max_bytes, current_batch, current_batch_has_content, batches, timezone, max_notify_news, added_news_count
             )
         # 3. 处理热榜统计
-        current_batch, current_batch_has_content, batches = process_stats_section(
+        current_batch, current_batch_has_content, batches, added_news_count = process_stats_section(
             current_batch, current_batch_has_content, batches
         )
         # 4. 处理 RSS 统计（如果有）
         if rss_items:
-            current_batch, current_batch_has_content, batches = _process_rss_stats_section(
+            current_batch, current_batch_has_content, batches, added_news_count = _process_rss_stats_section(
                 rss_items, format_type, feishu_separator, base_header, base_footer,
-                max_bytes, current_batch, current_batch_has_content, batches, timezone
+                max_bytes, current_batch, current_batch_has_content, batches, timezone, max_notify_news, added_news_count
             )
     else:
         # 默认：热点词汇统计在前，新增热点在后
         # 1. 处理热榜统计
-        current_batch, current_batch_has_content, batches = process_stats_section(
+        current_batch, current_batch_has_content, batches, added_news_count = process_stats_section(
             current_batch, current_batch_has_content, batches
         )
         # 2. 处理 RSS 统计（如果有）
         if rss_items:
-            current_batch, current_batch_has_content, batches = _process_rss_stats_section(
+            current_batch, current_batch_has_content, batches, added_news_count = _process_rss_stats_section(
                 rss_items, format_type, feishu_separator, base_header, base_footer,
-                max_bytes, current_batch, current_batch_has_content, batches, timezone
+                max_bytes, current_batch, current_batch_has_content, batches, timezone, max_notify_news, added_news_count
             )
         # 3. 处理热榜新增
-        current_batch, current_batch_has_content, batches = process_new_titles_section(
+        current_batch, current_batch_has_content, batches, added_news_count = process_new_titles_section(
             current_batch, current_batch_has_content, batches
         )
         # 4. 处理 RSS 新增（如果有）
         if rss_new_items:
-            current_batch, current_batch_has_content, batches = _process_rss_new_titles_section(
+            current_batch, current_batch_has_content, batches, added_news_count = _process_rss_new_titles_section(
                 rss_new_items, format_type, feishu_separator, base_header, base_footer,
-                max_bytes, current_batch, current_batch_has_content, batches, timezone
+                max_bytes, current_batch, current_batch_has_content, batches, timezone, max_notify_news, added_news_count
             )
 
     if report_data["failed_ids"]:
@@ -636,6 +685,8 @@ def _process_rss_stats_section(
     current_batch_has_content: bool,
     batches: List[str],
     timezone: str = "Asia/Shanghai",
+    max_notify_news: int = 5,
+    added_news_count: int = 0,
 ) -> tuple:
     """处理 RSS 统计区块（按关键词分组，与热榜统计格式一致）
 
@@ -653,10 +704,10 @@ def _process_rss_stats_section(
         timezone: 时区名称
 
     Returns:
-        (current_batch, current_batch_has_content, batches) 元组
+        (current_batch, current_batch_has_content, batches, added_news_count) 元组
     """
-    if not rss_stats:
-        return current_batch, current_batch_has_content, batches
+    if not rss_stats or (max_notify_news > 0 and added_news_count >= max_notify_news):
+        return current_batch, current_batch_has_content, batches, added_news_count
 
     # 计算总条目数
     total_items = sum(stat["count"] for stat in rss_stats)
@@ -691,6 +742,18 @@ def _process_rss_stats_section(
         word = stat["word"]
         count = stat["count"]
         sequence_display = f"[{i + 1}/{total_keywords}]"
+
+        # 限制针对当前关键词推送的新闻条目
+        original_titles = stat["titles"]
+        notify_titles = original_titles
+        
+        # 全局限制检查
+        if max_notify_news > 0:
+            remaining_slots = max_notify_news - added_news_count
+            if remaining_slots <= 0:
+                break
+            limit = min(len(original_titles), remaining_slots)
+            notify_titles = original_titles[:limit]
 
         # 构建关键词标题（与热榜格式一致）
         word_header = ""
@@ -739,8 +802,8 @@ def _process_rss_stats_section(
 
         # 构建第一条新闻（使用 format_title_for_platform）
         first_news_line = ""
-        if stat["titles"]:
-            first_title_data = stat["titles"][0]
+        if notify_titles:
+            first_title_data = notify_titles[0]
             if format_type in ("wework", "bark"):
                 formatted_title = format_title_for_platform("wework", first_title_data, show_source=True)
             elif format_type == "telegram":
@@ -757,7 +820,7 @@ def _process_rss_stats_section(
                 formatted_title = f"{first_title_data['title']}"
 
             first_news_line = f"  1. {formatted_title}\n"
-            if len(stat["titles"]) > 1:
+            if len(notify_titles) > 1:
                 first_news_line += "\n"
 
         # 原子性检查：关键词标题 + 第一条新闻必须一起处理
@@ -769,15 +832,17 @@ def _process_rss_stats_section(
                 batches.append(current_batch + base_footer)
             current_batch = base_header + rss_header + word_with_first_news
             current_batch_has_content = True
+            added_news_count += 1
             start_index = 1
         else:
             current_batch = test_content
             current_batch_has_content = True
+            added_news_count += 1
             start_index = 1
 
         # 处理剩余新闻条目
-        for j in range(start_index, len(stat["titles"])):
-            title_data = stat["titles"][j]
+        for j in range(start_index, len(notify_titles)):
+            title_data = notify_titles[j]
             if format_type in ("wework", "bark"):
                 formatted_title = format_title_for_platform("wework", title_data, show_source=True)
             elif format_type == "telegram":
@@ -794,7 +859,7 @@ def _process_rss_stats_section(
                 formatted_title = f"{title_data['title']}"
 
             news_line = f"  {j + 1}. {formatted_title}\n"
-            if j < len(stat["titles"]) - 1:
+            if j < len(notify_titles) - 1:
                 news_line += "\n"
 
             test_content = current_batch + news_line
@@ -803,9 +868,11 @@ def _process_rss_stats_section(
                     batches.append(current_batch + base_footer)
                 current_batch = base_header + rss_header + word_header + news_line
                 current_batch_has_content = True
+                added_news_count += 1
             else:
                 current_batch = test_content
                 current_batch_has_content = True
+                added_news_count += 1
 
         # 关键词间分隔符
         if i < len(rss_stats) - 1:
@@ -827,7 +894,7 @@ def _process_rss_stats_section(
             if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) < max_bytes:
                 current_batch = test_content
 
-    return current_batch, current_batch_has_content, batches
+    return current_batch, current_batch_has_content, batches, added_news_count
 
 
 def _process_rss_new_titles_section(
@@ -841,6 +908,8 @@ def _process_rss_new_titles_section(
     current_batch_has_content: bool,
     batches: List[str],
     timezone: str = "Asia/Shanghai",
+    max_notify_news: int = 5,
+    added_news_count: int = 0,
 ) -> tuple:
     """处理 RSS 新增区块（按来源分组，与热榜新增格式一致）
 
@@ -858,10 +927,10 @@ def _process_rss_new_titles_section(
         timezone: 时区名称
 
     Returns:
-        (current_batch, current_batch_has_content, batches) 元组
+        (current_batch, current_batch_has_content, batches, added_news_count) 元组
     """
-    if not rss_new_stats:
-        return current_batch, current_batch_has_content, batches
+    if not rss_new_stats or (max_notify_news > 0 and added_news_count >= max_notify_news):
+        return current_batch, current_batch_has_content, batches, added_news_count
 
     # 从关键词分组中提取所有条目，重新按来源分组
     source_map = {}
@@ -873,7 +942,7 @@ def _process_rss_new_titles_section(
             source_map[source_name].append(title_data)
 
     if not source_map:
-        return current_batch, current_batch_has_content, batches
+        return current_batch, current_batch_has_content, batches, added_news_count
 
     # 计算总条目数
     total_items = sum(len(titles) for titles in source_map.values())
@@ -906,8 +975,17 @@ def _process_rss_new_titles_section(
 
     # 按来源分组显示（与热榜新增格式一致）
     source_list = list(source_map.items())
-    for i, (source_name, titles) in enumerate(source_list):
-        count = len(titles)
+    for i, (source_name, original_titles) in enumerate(source_list):
+        # 限制推送的新闻条数
+        notify_titles = original_titles
+        if max_notify_news > 0:
+            remaining_slots = max_notify_news - added_news_count
+            if remaining_slots <= 0:
+                break
+            limit = min(len(original_titles), remaining_slots)
+            notify_titles = original_titles[:limit]
+            
+        count = len(original_titles)
 
         # 构建来源标题（与热榜新增格式一致）
         source_header = ""
@@ -926,8 +1004,8 @@ def _process_rss_new_titles_section(
 
         # 构建第一条新闻（不显示来源，禁用 new emoji）
         first_news_line = ""
-        if titles:
-            first_title_data = titles[0].copy()
+        if notify_titles:
+            first_title_data = notify_titles[0].copy()
             first_title_data["is_new"] = False
             if format_type in ("wework", "bark"):
                 formatted_title = format_title_for_platform("wework", first_title_data, show_source=False)
@@ -955,15 +1033,17 @@ def _process_rss_new_titles_section(
                 batches.append(current_batch + base_footer)
             current_batch = base_header + new_header + source_with_first_news
             current_batch_has_content = True
+            added_news_count += 1
             start_index = 1
         else:
             current_batch = test_content
             current_batch_has_content = True
+            added_news_count += 1
             start_index = 1
 
         # 处理剩余新闻条目（禁用 new emoji）
-        for j in range(start_index, len(titles)):
-            title_data = titles[j].copy()
+        for j in range(start_index, len(notify_titles)):
+            title_data = notify_titles[j].copy()
             title_data["is_new"] = False
             if format_type in ("wework", "bark"):
                 formatted_title = format_title_for_platform("wework", title_data, show_source=False)
@@ -988,14 +1068,16 @@ def _process_rss_new_titles_section(
                     batches.append(current_batch + base_footer)
                 current_batch = base_header + new_header + source_header + news_line
                 current_batch_has_content = True
+                added_news_count += 1
             else:
                 current_batch = test_content
                 current_batch_has_content = True
+                added_news_count += 1
 
         # 来源间添加空行（与热榜新增格式一致）
         current_batch += "\n"
 
-    return current_batch, current_batch_has_content, batches
+    return current_batch, current_batch_has_content, batches, added_news_count
 
 
 def _format_rss_item_line(
@@ -1003,6 +1085,8 @@ def _format_rss_item_line(
     index: int,
     format_type: str,
     timezone: str = "Asia/Shanghai",
+    max_notify_news: int = 5,
+    added_news_count: int = 0,
 ) -> str:
     """格式化单条 RSS 条目
 

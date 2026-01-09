@@ -264,7 +264,7 @@ class AppContext:
         mode: str = "daily",
     ) -> Dict:
         """准备报告数据"""
-        return prepare_report_data(
+        data = prepare_report_data(
             stats=stats,
             failed_ids=failed_ids,
             new_titles=new_titles,
@@ -274,6 +274,8 @@ class AppContext:
             matches_word_groups_func=self.matches_word_groups,
             load_frequency_words_func=self.load_frequency_words,
         )
+        data["report_title"] = self.config.get("REPORT_TITLE", "热点新闻分析")
+        return data
 
     def generate_html(
         self,
@@ -330,6 +332,7 @@ class AppContext:
             rss_items=rss_items,
             rss_new_items=rss_new_items,
             display_mode=self.display_mode,
+            report_title=self.config.get("REPORT_TITLE", "热点新闻分析"),
         )
 
     # === 通知内容渲染 ===
@@ -407,6 +410,8 @@ class AppContext:
             rss_new_items=rss_new_items,
             timezone=self.config.get("TIMEZONE", "Asia/Shanghai"),
             display_mode=self.display_mode,
+            max_notify_news=self.config.get("MAX_NOTIFY_NEWS", 5),
+            web_url=self.config.get("WEB_URL", ""),
         )
 
     # === 通知发送 ===

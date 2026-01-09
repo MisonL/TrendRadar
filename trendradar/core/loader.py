@@ -79,6 +79,7 @@ def _load_report_config(config_data: Dict) -> Dict:
         "SORT_BY_POSITION_FIRST": sort_by_position_env if sort_by_position_env is not None else report_config.get("sort_by_position_first", False),
         "MAX_NEWS_PER_KEYWORD": max_news_env or report_config.get("max_news_per_keyword", 0),
         "REVERSE_CONTENT_ORDER": reverse_content_env if reverse_content_env is not None else report_config.get("reverse_content_order", False),
+        "REPORT_TITLE": _get_env_str("REPORT_TITLE") or report_config.get("title", "热点新闻分析"),
     }
 
 
@@ -100,6 +101,8 @@ def _load_notification_config(config_data: Dict) -> Dict:
         "BATCH_SEND_INTERVAL": advanced.get("batch_send_interval", 1.0),
         "FEISHU_MESSAGE_SEPARATOR": advanced.get("feishu_message_separator", "---"),
         "MAX_ACCOUNTS_PER_CHANNEL": _get_env_int("MAX_ACCOUNTS_PER_CHANNEL") or advanced.get("max_accounts_per_channel", 3),
+        "MAX_NOTIFY_NEWS": _get_env_int("MAX_NOTIFY_NEWS") or notification.get("max_notify_news", 5),
+        "WEB_URL": _get_env_str("WEB_URL") or notification.get("web_url", ""),
     }
 
 

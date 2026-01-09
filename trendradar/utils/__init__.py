@@ -11,6 +11,7 @@ from trendradar.utils.time import (
     convert_time_for_display,
 )
 from trendradar.utils.url import normalize_url, get_url_signature
+from trendradar.utils.text import strip_markdown
 
 __all__ = [
     "get_configured_time",
@@ -20,4 +21,5 @@ __all__ = [
     "convert_time_for_display",
     "normalize_url",
     "get_url_signature",
+    "strip_markdown",
 ]

@@ -75,6 +75,7 @@ def send_to_feishu(
     get_time_func: Callable = None,
     rss_items: Optional[list] = None,
     rss_new_items: Optional[list] = None,
+    web_url: str = "",
 ) -> bool:
     """
     发送到飞书（支持分批发送，支持热榜+RSS合并）
@@ -189,6 +190,7 @@ def send_to_dingtalk(
     split_content_func: Callable = None,
     rss_items: Optional[list] = None,
     rss_new_items: Optional[list] = None,
+    web_url: str = "",
 ) -> bool:
     """
     发送到钉钉（支持分批发送，支持热榜+RSS合并）
@@ -242,10 +244,14 @@ def send_to_dingtalk(
             f"发送{log_prefix}第 {i}/{len(batches)} 批次，大小：{content_size} 字节 [{report_type}]"
         )
 
+        # 获取自定义标题
+        report_title_base = config.get("REPORT_TITLE", "TrendRadar 热点分析")
+        title = f"🔔 {report_title_base}报告 - {report_type}"
+
         payload = {
             "msgtype": "markdown",
             "markdown": {
-                "title": f"TrendRadar 热点分析报告 - {report_type}",
+                "title": title,
                 "text": batch_content,
             },
         }
@@ -294,6 +300,7 @@ def send_to_wework(
     split_content_func: Callable = None,
     rss_items: Optional[list] = None,
     rss_new_items: Optional[list] = None,
+    web_url: str = "",
 ) -> bool:
     """
     发送到企业微信（支持分批发送，支持 markdown 和 text 两种格式，支持热榜+RSS合并）
@@ -317,6 +324,7 @@ def send_to_wework(
         bool: 发送是否成功
     """
     headers = {"Content-Type": "application/json"}
+    from trendradar.utils import strip_markdown
     proxies = None
     if proxy_url:
         proxies = {"http": proxy_url, "https": proxy_url}
@@ -324,8 +332,9 @@ def send_to_wework(
     # 日志前缀
     log_prefix = f"企业微信{account_label}" if account_label else "企业微信"
 
-    # 获取消息类型配置（markdown 或 text）
-    is_text_mode = msg_type.lower() == "text"
+    # 获取消息类型配置（markdown, text, textcard）
+    is_text_mode = msg_type == "text"
+    is_card_mode = msg_type == "textcard"
 
     if is_text_mode:
         print(f"{log_prefix}使用 text 格式（个人微信模式）[{report_type}]")
@@ -350,12 +359,116 @@ def send_to_wework(
 
     # 逐批发送
     for i, batch_content in enumerate(batches, 1):
+        # 卡片模式下，强制只发送第一批，避免刷屏
+        if is_card_mode and i > 1:
+            print(f"{log_prefix}卡片模式：仅发送第一批，跳过后续 {len(batches)-1} 批次 [{report_type}]")
+            break
+
         # 根据消息类型构建 payload
         if is_text_mode:
             # text 格式：去除 markdown 语法
             plain_content = strip_markdown(batch_content)
             payload = {"msgtype": "text", "text": {"content": plain_content}}
             content_size = len(plain_content.encode("utf-8"))
+        elif is_card_mode:
+            # textcard 格式
+            # 注意：群机器人 Webhook 不支持 textcard，如果检测到是 webhook URL，自动降级为 news (图文)
+            if "webhook/send" in webhook_url:
+                print(f"{log_prefix}升级：使用 news (图文) 列表格式发送 (仿公众号样式)")
+                
+                card_title = report_data.get("report_title", report_type) or "TrendRadar 热点监控"
+                current_time = time.strftime("%Y-%m-%d %H:%M", time.localtime())
+                
+                # 提取前 5 条新闻链接
+                top_items = []
+                seen_titles = set()
+                
+                # 1. 尝试从 stats (高频热词/词组) 获取
+                # stats 结构: [{"word": "xx", "titles": [{"title": "xx", "url": "xx"}, ...]}, ...]
+                if "stats" in report_data and isinstance(report_data["stats"], list):
+                     for group in report_data["stats"]:
+                         if isinstance(group, dict) and "titles" in group:
+                             for item in group["titles"]:
+                                 t = item.get("title")
+                                 u = item.get("url")
+                                 if t and u and t not in seen_titles:
+                                     top_items.append({"title": t, "url": u})
+                                     seen_titles.add(t)
+                                     if len(top_items) >= 5: # 提前终止
+                                         break
+                         if len(top_items) >= 5:
+                             break
+                
+                # 2. 尝试从 new_titles 获取 (作为补充)
+                # new_titles 结构: {source_id: {title: {url: xx, ...}}}
+                if len(top_items) < 5 and "new_titles" in report_data and isinstance(report_data["new_titles"], dict):
+                    for source_id, titles_data in report_data["new_titles"].items():
+                        for t, info in titles_data.items():
+                            u = info.get("url")
+                            if t and u and t not in seen_titles:
+                                top_items.append({"title": t, "url": u})
+                                seen_titles.add(t)
+                                if len(top_items) >= 5:
+                                    break
+                        if len(top_items) >= 5:
+                            break
+                
+                # 限制数量：最多 5 条新闻
+                display_items = top_items[:5]
+                
+                # 确保有内容
+                if not display_items:
+                     display_items = [{"title": "暂无具体新闻条目，点击查看详情", "url": web_url or "https://github.com/MisonL/TrendRadar"}]
+
+                articles = []
+                
+                # 文章1：头部大图 (Banner) -> 跳转到 Web 列表页
+                articles.append({
+                    "title": f"{card_title}\n{current_time}",
+                    "description": "点击查看完整报告",
+                    "url": web_url or "https://github.com/MisonL/TrendRadar",
+                    "picurl": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=900&q=80"
+                })
+                
+                # 文章2-N：新闻列表 (无图) -> 跳转到新闻原始链接
+                for item in display_items:
+                    articles.append({
+                        "title": item["title"],
+                        "url": item["url"],
+                        "picurl": "" # 留空以显示为小图或纯文本行
+                    })
+                
+                # 文章N+1：查看更多 (底部) -> 跳转到 Web 列表页
+                articles.append({
+                    "title": "查看完整报告",
+                    "url": web_url or "https://github.com/MisonL/TrendRadar",
+                    "picurl": ""
+                })
+
+                payload = {
+                    "msgtype": "news",
+                    "news": {
+                        "articles": articles
+                    }
+                }
+                # 估算大小
+                content_size = 1000 
+            else:
+                # 真正的应用消息（需要 access_token，这里假设 URL 正确用于应用推送）
+                plain_content = strip_markdown(batch_content)
+                card_description = plain_content.replace("\n", "<br>")
+                card_title = report_data.get("report_title", report_type)
+                
+                payload = {
+                    "msgtype": "textcard",
+                    "textcard": {
+                        "title": card_title,
+                        "description": card_description,
+                        "url": web_url or "https://github.com/MisonL/TrendRadar",
+                        "btntxt": "详情"
+                    }
+                }
+                content_size = len(card_description.encode("utf-8"))
         else:
             # markdown 格式：保持原样
             payload = {"msgtype": "markdown", "markdown": {"content": batch_content}}
@@ -409,6 +522,7 @@ def send_to_telegram(
     split_content_func: Callable = None,
     rss_items: Optional[list] = None,
     rss_new_items: Optional[list] = None,
+    web_url: str = "",
 ) -> bool:
     """
     发送到 Telegram（支持分批发送，支持热榜+RSS合并）
@@ -574,7 +688,16 @@ def send_to_email(
 
         # 设置邮件主题
         now = get_time_func() if get_time_func else datetime.now()
-        subject = f"TrendRadar 热点分析报告 - {report_type} - {now.strftime('%m月%d日 %H:%M')}"
+        # 获取自定义标题
+        report_title = config.get("REPORT_TITLE", "TrendRadar 热点分析报告")
+
+        if mode == "daily":
+            subject = f"{report_title} - {now.strftime('%Y-%m-%d')}"
+        elif mode == "current":
+            subject = f"{report_title} (实时榜单) - {now.strftime('%Y-%m-%d %H:%M')}"
+        else:
+            subject = f"{report_title} (增量更新) - {now.strftime('%Y-%m-%d %H:%M')}"
+
         msg["Subject"] = Header(subject, "utf-8")
 
         # 设置其他标准 header
@@ -668,6 +791,7 @@ def send_to_ntfy(
     split_content_func: Callable = None,
     rss_items: Optional[list] = None,
     rss_new_items: Optional[list] = None,
+    web_url: str = "",
 ) -> bool:
     """
     发送到 ntfy（支持分批发送，严格遵守4KB限制，支持热榜+RSS合并）
@@ -848,6 +972,7 @@ def send_to_bark(
     split_content_func: Callable = None,
     rss_items: Optional[list] = None,
     rss_new_items: Optional[list] = None,
+    web_url: str = "",
 ) -> bool:
     """
     发送到 Bark（支持分批发送，使用 markdown 格式，支持热榜+RSS合并）
@@ -999,6 +1124,7 @@ def send_to_slack(
     split_content_func: Callable = None,
     rss_items: Optional[list] = None,
     rss_new_items: Optional[list] = None,
+    web_url: str = "",
 ) -> bool:
     """
     发送到 Slack（支持分批发送，使用 mrkdwn 格式，支持热榜+RSS合并）
