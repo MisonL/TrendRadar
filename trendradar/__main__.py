@@ -416,18 +416,30 @@ class NewsAnalyzer:
             # 计算并过滤已推送的新闻
             filtered_report_data, items_to_record = self.ctx.deduplicate_report_data(report_data)
             
+            # 过滤 RSS
+            filtered_rss_items, rss_items_to_record = self.ctx.deduplicate_rss_data(rss_items)
+            
+            # 使用过滤后的 RSS
+            rss_items = filtered_rss_items
+            # 注意: rss_new_items 通常用于历史趋势，这里暂不处理去重，只针对最终分发的 rss_items
+            
+            # 合并待记录条目
+            items_to_record.extend(rss_items_to_record)
+
             # 检查去重后是否还有内容
             has_filtered_news = any(len(stat["titles"]) > 0 for stat in filtered_report_data.get("stats", []))
+            has_filtered_rss = len(rss_items) > 0
             
-            # 如果去重后没有新闻，且没有RSS（或者RSS也应该去重，这里暂不处理RSS去重），则跳过
-            # 注意：如果启用了去重，且过滤后没有内容了，应该阻止推送
+            # 如果去重后没有新闻，且没有RSS，则跳过
             if self.ctx.config["NOTIFICATION"].get("deduplication", {}).get("enabled", False):
-                if not has_filtered_news and not has_rss_content:
-                    print("[去重] 所有新闻均已推送过，跳过本次推送")
+                if not has_filtered_news and not has_filtered_rss:
+                    print("[去重] 所有新闻和 RSS 均已推送过，跳过本次推送")
                     return False
                 
                 if not has_filtered_news:
-                     print("[去重] 热榜新闻均已推送过，仅推送 RSS")
+                     print("[去重] 热榜新闻均已推送过，仅推送新增 RSS")
+                elif not has_filtered_rss and rss_items: # 原始有但过滤后没了
+                     print("[去重] RSS 均已推送过，仅推送热榜新闻")
 
             # 使用过滤后的数据进行推送
             dispatch_data = filtered_report_data

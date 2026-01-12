@@ -534,6 +534,48 @@ class AppContext:
         if count > 0:
             print(f"[去重] 已记录 {count} 条推送历史")
 
+    def deduplicate_rss_data(
+        self, rss_items: List[Dict]
+    ) -> Tuple[List[Dict], List[Dict]]:
+        """
+        对 RSS 条目进行去重处理
+
+        Args:
+            rss_items: 原始 RSS 条目列表
+
+        Returns:
+            (filtered_rss_items, items_to_record)
+        """
+        dedup_config = self.config.get("NOTIFICATION", {}).get("deduplication", {})
+        if not dedup_config.get("enabled", False) or not rss_items:
+            return rss_items, []
+
+        filtered_items = []
+        items_to_record = []
+
+        for item in rss_items:
+            url = item.get("url", "")
+            title = item.get("title", "")
+            feed_id = item.get("feed_id", "")
+
+            content_hash = self.get_content_hash(url, title, feed_id)
+            
+            if not self.get_storage_manager().is_news_pushed(content_hash):
+                filtered_items.append(item)
+                items_to_record.append({
+                    "hash": content_hash,
+                    "title": title,
+                    "url": url
+                })
+            else:
+                # print(f"[去重] 过滤已推送 RSS: {title[:20]}...")
+                pass
+
+        if len(rss_items) != len(filtered_items):
+            print(f"[去重] RSS 过滤前: {len(rss_items)} 条, 过滤后: {len(filtered_items)} 条")
+
+        return filtered_items, items_to_record
+
     # === 资源清理 ===
 
     def cleanup(self):
