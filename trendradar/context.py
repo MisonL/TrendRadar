@@ -8,6 +8,7 @@
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
+import hashlib
 
 from trendradar.utils.time import (
     get_configured_time,
@@ -435,7 +436,6 @@ class AppContext:
 
     def get_content_hash(self, item_url: str, item_title: str, item_source: str) -> str:
         """计算内容哈希值"""
-        import hashlib
         dedup_config = self.config.get("NOTIFICATION", {}).get("deduplication", {})
         use_url_hash = dedup_config.get("use_url_hash", True)
 

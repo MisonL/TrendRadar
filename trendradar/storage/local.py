@@ -52,7 +52,6 @@ class LocalStorageBackend(StorageBackend):
         self.enable_txt = enable_txt
         self.enable_html = enable_html
         self.timezone = timezone
-        self.timezone = timezone
         self._db_connections: Dict[str, sqlite3.Connection] = {}
         self._history_conn: Optional[sqlite3.Connection] = None
 
