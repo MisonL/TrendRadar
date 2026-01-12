@@ -391,6 +391,9 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     # Webhook 配置
     config.update(_load_webhook_config(config_data))
 
+    # 保存原始 notification 配置以支持嵌套访问（如 deduplication）
+    config["NOTIFICATION"] = config_data.get("notification", {})
+
     # 打印通知渠道配置来源
     _print_notification_sources(config)
 

@@ -307,6 +307,16 @@ class StorageManager:
         """
         return self.get_backend().record_push(report_type, date)
 
+    # === 消息去重相关方法 ===
+
+    def is_news_pushed(self, content_hash: str) -> bool:
+        """检查新闻是否已推送"""
+        return self.get_backend().is_news_pushed(content_hash)
+
+    def record_pushed_news(self, content_hash: str, title: str = "", url: str = "") -> bool:
+        """记录已推送的新闻"""
+        return self.get_backend().record_pushed_news(content_hash, title, url)
+
 
 def get_storage_manager(
     backend_type: str = "auto",

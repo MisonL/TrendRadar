@@ -52,7 +52,9 @@ class LocalStorageBackend(StorageBackend):
         self.enable_txt = enable_txt
         self.enable_html = enable_html
         self.timezone = timezone
+        self.timezone = timezone
         self._db_connections: Dict[str, sqlite3.Connection] = {}
+        self._history_conn: Optional[sqlite3.Connection] = None
 
     @property
     def backend_name(self) -> str:
@@ -445,6 +447,50 @@ class LocalStorageBackend(StorageBackend):
             print(f"[本地存储] 读取数据失败: {e}")
             return None
 
+    def _get_history_connection(self) -> sqlite3.Connection:
+        """获取历史记录数据库连接（用于去重）"""
+        if self._history_conn is None:
+            history_db_path = self.data_dir / "history.db"
+            conn = sqlite3.connect(history_db_path)
+            conn.row_factory = sqlite3.Row
+            # 初始化表结构
+            self._init_tables(conn, "news")  # 使用 news schema，包含 pushed_news
+            self._history_conn = conn
+        return self._history_conn
+
+    def is_news_pushed(self, content_hash: str) -> bool:
+        """
+        检查新闻是否已推送
+        """
+        try:
+            conn = self._get_history_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT 1 FROM pushed_news WHERE content_hash = ? LIMIT 1", 
+                (content_hash,)
+            )
+            return bool(cursor.fetchone())
+        except Exception as e:
+            print(f"[本地存储] 检查推送记录失败: {e}")
+            return False
+
+    def record_pushed_news(self, content_hash: str, title: str = "", url: str = "") -> bool:
+        """
+        记录已推送的新闻
+        """
+        try:
+            conn = self._get_history_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR IGNORE INTO pushed_news (content_hash, title, url)
+                VALUES (?, ?, ?)
+            """, (content_hash, title, url))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"[本地存储] 记录推送历史失败: {e}")
+            return False
+
     def get_latest_crawl_data(self, date: Optional[str] = None) -> Optional[NewsData]:
         """
         获取最新一次抓取的数据
@@ -784,6 +830,14 @@ class LocalStorageBackend(StorageBackend):
                 print(f"[本地存储] 关闭连接失败 {db_path}: {e}")
 
         self._db_connections.clear()
+
+        if self._history_conn:
+            try:
+                self._history_conn.close()
+                print("[本地存储] 关闭历史数据库连接")
+            except Exception as e:
+                print(f"[本地存储] 关闭历史连接失败: {e}")
+            self._history_conn = None
 
     def cleanup_old_data(self, retention_days: int) -> int:
         """

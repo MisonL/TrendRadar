@@ -115,3 +115,18 @@ CREATE INDEX IF NOT EXISTS idx_crawl_status_record ON crawl_source_status(crawl_
 
 -- 排名历史索引
 CREATE INDEX IF NOT EXISTS idx_rank_history_news ON rank_history(news_item_id);
+
+-- ============================================
+-- 推送历史表
+-- 用于消息去重，记录已推送的新闻指纹
+-- ============================================
+CREATE TABLE IF NOT EXISTS pushed_news (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_hash TEXT NOT NULL UNIQUE,   -- 内容指纹 (URL Hash 或 Title+Source)
+    title TEXT,                          -- 标题 (用于调试)
+    url TEXT,                            -- 链接 (用于调试)
+    pushed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 索引定义
+CREATE INDEX IF NOT EXISTS idx_pushed_news_hash ON pushed_news(content_hash);

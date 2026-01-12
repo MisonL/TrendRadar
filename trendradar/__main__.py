@@ -412,13 +412,33 @@ class NewsAnalyzer:
             # 准备报告数据
             report_data = self.ctx.prepare_report(stats, failed_ids, new_titles, id_to_name, mode)
 
+            # === 消息去重处理 ===
+            # 计算并过滤已推送的新闻
+            filtered_report_data, items_to_record = self.ctx.deduplicate_report_data(report_data)
+            
+            # 检查去重后是否还有内容
+            has_filtered_news = any(len(stat["titles"]) > 0 for stat in filtered_report_data.get("stats", []))
+            
+            # 如果去重后没有新闻，且没有RSS（或者RSS也应该去重，这里暂不处理RSS去重），则跳过
+            # 注意：如果启用了去重，且过滤后没有内容了，应该阻止推送
+            if self.ctx.config["NOTIFICATION"].get("deduplication", {}).get("enabled", False):
+                if not has_filtered_news and not has_rss_content:
+                    print("[去重] 所有新闻均已推送过，跳过本次推送")
+                    return False
+                
+                if not has_filtered_news:
+                     print("[去重] 热榜新闻均已推送过，仅推送 RSS")
+
+            # 使用过滤后的数据进行推送
+            dispatch_data = filtered_report_data
+            
             # 是否发送版本更新信息
             update_info_to_send = self.update_info if cfg["SHOW_VERSION_UPDATE"] else None
 
             # 使用 NotificationDispatcher 发送到所有渠道（合并热榜+RSS）
             dispatcher = self.ctx.create_notification_dispatcher()
             results = dispatcher.dispatch_all(
-                report_data=report_data,
+                report_data=dispatch_data,
                 report_type=report_type,
                 update_info=update_info_to_send,
                 proxy_url=self.proxy_url,
@@ -432,14 +452,19 @@ class NewsAnalyzer:
                 print("未配置任何通知渠道，跳过通知发送")
                 return False
 
-            # 如果成功发送了任何通知，且启用了每天只推一次，则记录推送
-            if (
-                cfg["PUSH_WINDOW"]["ENABLED"]
-                and cfg["PUSH_WINDOW"]["ONCE_PER_DAY"]
-                and any(results.values())
-            ):
-                push_manager = self.ctx.create_push_manager()
-                push_manager.record_push(report_type)
+            # 如果成功发送了任何通知
+            if any(results.values()):
+                # 记录去重历史
+                if items_to_record:
+                    self.ctx.record_pushed_items(items_to_record)
+
+                # 如果启用了每天只推一次，则记录推送
+                if (
+                    cfg["PUSH_WINDOW"]["ENABLED"]
+                    and cfg["PUSH_WINDOW"]["ONCE_PER_DAY"]
+                ):
+                    push_manager = self.ctx.create_push_manager()
+                    push_manager.record_push(report_type)
 
             return True
 

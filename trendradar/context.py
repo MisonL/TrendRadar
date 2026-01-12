@@ -431,6 +431,109 @@ class AppContext:
             get_time_func=self.get_time,
         )
 
+    # === 消息去重 ===
+
+    def get_content_hash(self, item_url: str, item_title: str, item_source: str) -> str:
+        """计算内容哈希值"""
+        import hashlib
+        dedup_config = self.config.get("NOTIFICATION", {}).get("deduplication", {})
+        use_url_hash = dedup_config.get("use_url_hash", True)
+
+        if use_url_hash and item_url:
+            # 使用 URL 哈希
+            return hashlib.md5(item_url.encode("utf-8")).hexdigest()
+        else:
+            # 使用 标题+来源 哈希
+            content = f"{item_source}:{item_title}"
+            return hashlib.md5(content.encode("utf-8")).hexdigest()
+
+    def deduplicate_report_data(
+        self, report_data: Dict
+    ) -> Tuple[Dict, List[Dict]]:
+        """
+        对报告数据进行去重处理
+
+        Args:
+            report_data: 原始报告数据
+
+        Returns:
+            (filtered_report_data, items_to_record)
+            - filtered_report_data: 去重后的报告数据（可直接用于发送）
+            - items_to_record: 需要记录到已推送表的数据列表
+        """
+        dedup_config = self.config.get("NOTIFICATION", {}).get("deduplication", {})
+        if not dedup_config.get("enabled", False):
+            return report_data, []
+
+        items_to_record = []
+        filtered_stats = []
+        
+        # 处理热榜数据 (report_data['stats'])
+        if "stats" in report_data:
+            for stat in report_data["stats"]:
+                keyword = stat.get("keyword", "")
+                filtered_titles = []
+                
+                for title_obj in stat["titles"]:
+                     # title_obj 可能是 NewsItem 对象或字典，需兼容处理
+                    if hasattr(title_obj, "url"):
+                        url = title_obj.url
+                        title = title_obj.title
+                        source_id = title_obj.source_id
+                    else:
+                        url = title_obj.get("url", "")
+                        title = title_obj.get("title", "")
+                        source_id = title_obj.get("source_id", "")
+
+                    content_hash = self.get_content_hash(url, title, source_id)
+                    
+                    if not self.get_storage_manager().is_news_pushed(content_hash):
+                        filtered_titles.append(title_obj)
+                        items_to_record.append({
+                            "hash": content_hash,
+                            "title": title,
+                            "url": url
+                        })
+                    else:
+                        print(f"[去重] 过滤已推送新闻: {title[:20]}...")
+
+                if filtered_titles:
+                    new_stat = stat.copy()
+                    new_stat["titles"] = filtered_titles
+                    new_stat["count"] = len(filtered_titles) # 更新计数
+                    filtered_stats.append(new_stat)
+
+        # 构建新的 report_data
+        filtered_data = report_data.copy()
+        if "stats" in report_data:
+            filtered_data["stats"] = filtered_stats
+            
+        # 注意: new_titles (新增列表) 目前通常不直接用于正文展示，而是作为附件或 separate block
+        # 如果 new_titles 也需要去重，逻辑类似。目前主要针对 stats (热榜聚合)
+        
+        # 记录日志
+        original_count = sum(len(s["titles"]) for s in report_data.get("stats", []))
+        filtered_count = sum(len(s["titles"]) for s in filtered_stats)
+        if original_count != filtered_count:
+             print(f"[去重] 过滤前: {original_count} 条, 过滤后: {filtered_count} 条")
+
+        return filtered_data, items_to_record
+
+    def record_pushed_items(self, items: List[Dict]) -> None:
+        """批量记录已推送条目"""
+        # dedup_config = self.config.get("NOTIFICATION", {}).get("deduplication", {})
+        # if not dedup_config.get("enabled", False):
+        #    return
+
+        manager = self.get_storage_manager()
+        count = 0
+        for item in items:
+            if manager.record_pushed_news(item["hash"], item["title"], item["url"]):
+                count += 1
+        
+        if count > 0:
+            print(f"[去重] 已记录 {count} 条推送历史")
+
     # === 资源清理 ===
 
     def cleanup(self):

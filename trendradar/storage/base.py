@@ -459,6 +459,34 @@ class StorageBackend(ABC):
         """
         pass
 
+    @abstractmethod
+    def is_news_pushed(self, content_hash: str) -> bool:
+        """
+        检查新闻是否已推送
+
+        Args:
+            content_hash: 内容哈希值
+
+        Returns:
+            是否已推送
+        """
+        pass
+
+    @abstractmethod
+    def record_pushed_news(self, content_hash: str, title: str = "", url: str = "") -> bool:
+        """
+        记录已推送的新闻
+
+        Args:
+            content_hash: 内容哈希值
+            title: 标题（可选）
+            url: 链接（可选）
+
+        Returns:
+            是否记录成功
+        """
+        pass
+
 
 def convert_crawl_results_to_news_data(
     results: Dict[str, Dict],
