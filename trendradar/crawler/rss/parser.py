@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from email.utils import parsedate_to_datetime
 
+from trendradar.utils.image import extract_main_image, is_valid_image_url
+
 try:
     import feedparser
     HAS_FEEDPARSER = True
@@ -30,6 +32,7 @@ class ParsedRSSItem:
     summary: Optional[str] = None
     author: Optional[str] = None
     guid: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class RSSParser:
@@ -168,6 +171,17 @@ class RSSParser:
         # GUID
         guid = item_data.get("id", "") or url
 
+        # 图片提取
+        image_url = item_data.get("image", "") or item_data.get("banner_image", "")
+        if not image_url or not is_valid_image_url(image_url):
+            # 尝试从 content_html 中提取
+            content_html = item_data.get("content_html", "")
+            if content_html:
+                image_url = extract_main_image(content_html, url)
+        
+        if not is_valid_image_url(image_url):
+            image_url = None
+
         return ParsedRSSItem(
             title=title,
             url=url,
@@ -175,6 +189,7 @@ class RSSParser:
             summary=summary or None,
             author=author,
             guid=guid,
+            image_url=image_url,
         )
 
     def _parse_iso_date(self, date_str: str) -> Optional[str]:
@@ -234,6 +249,7 @@ class RSSParser:
         summary = self._parse_summary(entry)
         author = self._parse_author(entry)
         guid = entry.get("id") or entry.get("guid", {}).get("value") or url
+        image_url = self._parse_image(entry, url)
 
         return ParsedRSSItem(
             title=title,
@@ -242,6 +258,7 @@ class RSSParser:
             summary=summary,
             author=author,
             guid=guid,
+            image_url=image_url,
         )
 
     def _clean_text(self, text: str) -> str:
@@ -330,3 +347,51 @@ class RSSParser:
                 return ", ".join(names)
 
         return None
+
+    def _parse_image(self, entry: Any, url: str) -> Optional[str]:
+        """解析文章图片"""
+        image_url = None
+
+        # 1. 尝试从 enclosures 中获取
+        enclosures = entry.get("enclosures", [])
+        for enclosure in enclosures:
+            if enclosure.get("type", "").startswith("image/"):
+                image_url = enclosure.get("href")
+                break
+        
+        # 2. 尝试从 media:content 中获取 (feedparser 通常解析为 media_content)
+        if not image_url:
+            media_content = entry.get("media_content", [])
+            for media in media_content:
+                if media.get("type", "").startswith("image/") or media.get("medium") == "image":
+                    image_url = media.get("url")
+                    break
+
+        # 3. 尝试从 media:thumbnail 中获取 (feedparser 通常解析为 media_thumbnail)
+        if not image_url:
+            media_thumbnail = entry.get("media_thumbnail", [])
+            if media_thumbnail:
+                image_url = media_thumbnail[0].get("url")
+
+        # 4. 如果以上都没有，尝试从摘要或内容中提取
+        if not image_url:
+            # 优先检查 content
+            content_list = entry.get("content", [])
+            content_html = ""
+            if content_list and isinstance(content_list, list):
+                content_html = content_list[0].get("value", "")
+            
+            # 其次检查 summary/description (如果是 HTML)
+            if not content_html:
+                summary = entry.get("summary") or entry.get("description", "")
+                if summary and ("<img" in summary or "![" in summary):
+                    content_html = summary
+
+            if content_html:
+                image_url = extract_main_image(content_html, url)
+
+        # 校验提取到的 URL
+        if not is_valid_image_url(image_url):
+            return None
+
+        return image_url

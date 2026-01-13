@@ -74,6 +74,7 @@ def prepare_report_data(
                 for title, title_data in titles_data.items():
                     url = title_data.get("url", "")
                     mobile_url = title_data.get("mobileUrl", "")
+                    image_url = title_data.get("image_url", "")
                     ranks = title_data.get("ranks", [])
 
                     processed_title = {
@@ -85,6 +86,7 @@ def prepare_report_data(
                         "rank_threshold": rank_threshold,
                         "url": url,
                         "mobile_url": mobile_url,
+                        "image_url": image_url,
                         "is_new": True,
                     }
                     source_titles.append(processed_title)
@@ -114,6 +116,7 @@ def prepare_report_data(
                 "rank_threshold": title_data["rank_threshold"],
                 "url": title_data.get("url", ""),
                 "mobile_url": title_data.get("mobileUrl", ""),
+                "image_url": title_data.get("image_url", ""),
                 "is_new": title_data.get("is_new", False),
             }
             processed_titles.append(processed_title)

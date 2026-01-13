@@ -225,23 +225,25 @@ class LocalStorageBackend(StorageBackend):
                                         title = ?,
                                         rank = ?,
                                         mobile_url = ?,
+                                        image_url = CASE WHEN ? != '' THEN ? ELSE image_url END,
                                         last_crawl_time = ?,
                                         crawl_count = crawl_count + 1,
                                         updated_at = ?
                                     WHERE id = ?
                                 """, (item.title, item.rank, item.mobile_url,
+                                      item.image_url, item.image_url,
                                       data.crawl_time, now_str, existing_id))
                                 updated_count += 1
                             else:
                                 # 不存在，插入新记录（存储标准化后的 URL）
                                 cursor.execute("""
                                     INSERT INTO news_items
-                                    (title, platform_id, rank, url, mobile_url,
+                                    (title, platform_id, rank, url, mobile_url, image_url,
                                      first_crawl_time, last_crawl_time, crawl_count,
                                      created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                                 """, (item.title, source_id, item.rank, normalized_url,
-                                      item.mobile_url, data.crawl_time, data.crawl_time,
+                                      item.mobile_url, item.image_url, data.crawl_time, data.crawl_time,
                                       now_str, now_str))
                                 new_id = cursor.lastrowid
                                 # 记录初始排名
@@ -255,12 +257,12 @@ class LocalStorageBackend(StorageBackend):
                             # URL 为空的情况，直接插入（不做去重）
                             cursor.execute("""
                                 INSERT INTO news_items
-                                (title, platform_id, rank, url, mobile_url,
+                                (title, platform_id, rank, url, mobile_url, image_url,
                                  first_crawl_time, last_crawl_time, crawl_count,
                                  created_at, updated_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                             """, (item.title, source_id, item.rank, "",
-                                  item.mobile_url, data.crawl_time, data.crawl_time,
+                                  item.mobile_url, item.image_url, data.crawl_time, data.crawl_time,
                                   now_str, now_str))
                             new_id = cursor.lastrowid
                             # 记录初始排名
@@ -350,7 +352,7 @@ class LocalStorageBackend(StorageBackend):
             # 获取所有新闻数据（包含 id 用于查询排名历史）
             cursor.execute("""
                 SELECT n.id, n.title, n.platform_id, p.name as platform_name,
-                       n.rank, n.url, n.mobile_url,
+                       n.rank, n.url, n.mobile_url, n.image_url,
                        n.first_crawl_time, n.last_crawl_time, n.crawl_count
                 FROM news_items n
                 LEFT JOIN platforms p ON n.platform_id = p.id
@@ -406,6 +408,7 @@ class LocalStorageBackend(StorageBackend):
                     rank=row[4],
                     url=row[5] or "",
                     mobile_url=row[6] or "",
+                    image_url=row[7] or "",
                     crawl_time=row[8],  # last_crawl_time
                     ranks=ranks,
                     first_time=row[7],  # first_crawl_time
@@ -524,7 +527,7 @@ class LocalStorageBackend(StorageBackend):
             # 获取该时间的新闻数据（包含 id 用于查询排名历史）
             cursor.execute("""
                 SELECT n.id, n.title, n.platform_id, p.name as platform_name,
-                       n.rank, n.url, n.mobile_url,
+                       n.rank, n.url, n.mobile_url, n.image_url,
                        n.first_crawl_time, n.last_crawl_time, n.crawl_count
                 FROM news_items n
                 LEFT JOIN platforms p ON n.platform_id = p.id
@@ -577,6 +580,7 @@ class LocalStorageBackend(StorageBackend):
                     rank=row[4],
                     url=row[5] or "",
                     mobile_url=row[6] or "",
+                    image_url=row[7] or "",
                     crawl_time=row[8],  # last_crawl_time
                     ranks=ranks,
                     first_time=row[7],  # first_crawl_time
@@ -1064,35 +1068,37 @@ class LocalStorageBackend(StorageBackend):
                                         published_at = ?,
                                         summary = ?,
                                         author = ?,
+                                        image_url = CASE WHEN ? != '' THEN ? ELSE image_url END,
                                         last_crawl_time = ?,
                                         crawl_count = crawl_count + 1,
                                         updated_at = ?
                                     WHERE id = ?
                                 """, (item.title, item.published_at, item.summary,
-                                      item.author, data.crawl_time, now_str, existing_id))
+                                      item.author, item.image_url, item.image_url,
+                                      data.crawl_time, now_str, existing_id))
                                 updated_count += 1
                             else:
                                 # 不存在，插入新记录
                                 cursor.execute("""
                                     INSERT INTO rss_items
-                                    (title, feed_id, url, published_at, summary, author,
+                                    (title, feed_id, url, published_at, summary, author, image_url,
                                      first_crawl_time, last_crawl_time, crawl_count,
                                      created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                                 """, (item.title, feed_id, item.url, item.published_at,
-                                      item.summary, item.author, data.crawl_time,
+                                      item.summary, item.author, item.image_url, data.crawl_time,
                                       data.crawl_time, now_str, now_str))
                                 new_count += 1
                         else:
                             # URL 为空，直接插入
                             cursor.execute("""
                                 INSERT INTO rss_items
-                                (title, feed_id, url, published_at, summary, author,
+                                (title, feed_id, url, published_at, summary, author, image_url,
                                  first_crawl_time, last_crawl_time, crawl_count,
                                  created_at, updated_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                             """, (item.title, feed_id, "", item.published_at,
-                                  item.summary, item.author, data.crawl_time,
+                                  item.summary, item.author, item.image_url, data.crawl_time,
                                   data.crawl_time, now_str, now_str))
                             new_count += 1
 
@@ -1168,7 +1174,7 @@ class LocalStorageBackend(StorageBackend):
             # 获取所有 RSS 数据
             cursor.execute("""
                 SELECT i.id, i.title, i.feed_id, f.name as feed_name,
-                       i.url, i.published_at, i.summary, i.author,
+                       i.url, i.published_at, i.summary, i.author, i.image_url,
                        i.first_crawl_time, i.last_crawl_time, i.crawl_count
                 FROM rss_items i
                 LEFT JOIN rss_feeds f ON i.feed_id = f.id

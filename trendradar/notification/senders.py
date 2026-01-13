@@ -27,6 +27,7 @@ from typing import Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
 import requests
+from trendradar.utils.image import is_valid_image_url, get_default_banner
 
 from .batch import add_batch_headers, get_max_batch_header_size
 from .formatters import convert_markdown_to_mrkdwn, strip_markdown
@@ -391,8 +392,13 @@ def send_to_wework(
                              for item in group["titles"]:
                                  t = item.get("title")
                                  u = item.get("url")
+                                 img_url = item.get("image_url")
                                  if t and u and t not in seen_titles:
-                                     top_items.append({"title": t, "url": u})
+                                     top_items.append({
+                                         "title": t,
+                                         "url": u,
+                                         "picurl": img_url if is_valid_image_url(img_url) else ""
+                                     })
                                      seen_titles.add(t)
                                      if len(top_items) >= 5: # 提前终止
                                          break
@@ -405,8 +411,13 @@ def send_to_wework(
                     for source_id, titles_data in report_data["new_titles"].items():
                         for t, info in titles_data.items():
                             u = info.get("url")
+                            img_url = info.get("image_url")
                             if t and u and t not in seen_titles:
-                                top_items.append({"title": t, "url": u})
+                                top_items.append({
+                                    "title": t,
+                                    "url": u,
+                                    "picurl": img_url if is_valid_image_url(img_url) else ""
+                                })
                                 seen_titles.add(t)
                                 if len(top_items) >= 5:
                                     break
@@ -418,7 +429,7 @@ def send_to_wework(
                 
                 # 确保有内容
                 if not display_items:
-                     display_items = [{"title": "暂无具体新闻条目，点击查看详情", "url": web_url or "https://github.com/MisonL/TrendRadar"}]
+                     display_items = [{"title": "暂无具体新闻条目，点击查看详情", "url": web_url or "https://github.com/MisonL/TrendRadar", "picurl": ""}]
 
                 articles = []
                 
@@ -427,7 +438,7 @@ def send_to_wework(
                     "title": f"{card_title}\n{current_time}",
                     "description": "点击查看完整报告",
                     "url": web_url or "https://github.com/MisonL/TrendRadar",
-                    "picurl": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=900&q=80"
+                    "picurl": get_default_banner()
                 })
                 
                 # 文章2-N：新闻列表 (无图) -> 跳转到新闻原始链接
@@ -435,7 +446,7 @@ def send_to_wework(
                     articles.append({
                         "title": item["title"],
                         "url": item["url"],
-                        "picurl": "" # 留空以显示为小图或纯文本行
+                        "picurl": item["picurl"]  # 使用提取到的图片 URL
                     })
                 
                 # 文章N+1：查看更多 (底部) -> 跳转到 Web 列表页

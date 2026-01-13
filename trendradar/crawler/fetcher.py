@@ -15,6 +15,7 @@ import time
 from typing import Dict, List, Tuple, Optional, Union
 
 import requests
+from trendradar.utils.image import is_valid_image_url
 
 
 class DataFetcher:
@@ -164,7 +165,14 @@ class DataFetcher:
                                 "ranks": [index],
                                 "url": url,
                                 "mobileUrl": mobile_url,
+                                "image_url": "",  # 初始化为空
                             }
+                        
+                        # 尝试提取图片 (热榜数据通常有 pic 或 img 字段)
+                        # API 可能返回 'pic', 'img', 'cover', 'thumbnail' 等字段
+                        image_url = item.get("pic") or item.get("img") or item.get("cover") or item.get("thumbnail")
+                        if image_url and is_valid_image_url(image_url):
+                             results[id_value][title]["image_url"] = image_url
                 except json.JSONDecodeError:
                     print(f"解析 {id_value} 响应失败")
                     failed_ids.append(id_value)

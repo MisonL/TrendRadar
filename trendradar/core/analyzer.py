@@ -248,6 +248,7 @@ def count_word_frequency(
             source_ranks = title_data.get("ranks", [])
             source_url = title_data.get("url", "")
             source_mobile_url = title_data.get("mobileUrl", "")
+            source_image_url = title_data.get("image_url", "")
 
             # 找到匹配的词组（防御性转换确保类型安全）
             title_lower = str(title).lower() if not isinstance(title, str) else title.lower()
@@ -290,8 +291,8 @@ def count_word_frequency(
                 ranks = source_ranks if source_ranks else []
                 url = source_url
                 mobile_url = source_mobile_url
+                image_url = source_image_url
 
-                # 对于 current 模式，从历史统计信息中获取完整数据
                 if (
                     mode == "current"
                     and title_info
@@ -306,6 +307,7 @@ def count_word_frequency(
                         ranks = info["ranks"]
                     url = info.get("url", source_url)
                     mobile_url = info.get("mobileUrl", source_mobile_url)
+                    image_url = info.get("image_url", source_image_url)
                 elif (
                     title_info
                     and source_id in title_info
@@ -319,6 +321,7 @@ def count_word_frequency(
                         ranks = info["ranks"]
                     url = info.get("url", source_url)
                     mobile_url = info.get("mobileUrl", source_mobile_url)
+                    image_url = info.get("image_url", source_image_url)
 
                 if not ranks:
                     ranks = [99]
@@ -347,8 +350,10 @@ def count_word_frequency(
                         "count": count_info,
                         "ranks": ranks,
                         "rank_threshold": rank_threshold,
+                        "rank_threshold": rank_threshold,
                         "url": url,
                         "mobileUrl": mobile_url,
+                        "image_url": image_url,
                         "is_new": is_new,
                     }
                 )
@@ -642,8 +647,10 @@ def count_rss_frequency(
                     "count": 1,  # RSS 条目通常只出现一次
                     "ranks": [rank],
                     "rank_threshold": rank_threshold,
+                    "rank_threshold": rank_threshold,
                     "url": url,
                     "mobile_url": "",
+                    "image_url": item.get("image_url", ""),
                     "is_new": is_new,
                 }
                 word_stats[group_key]["titles"].append(title_data)

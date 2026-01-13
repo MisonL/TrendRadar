@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS rss_items (
     title TEXT NOT NULL,                      -- 标题
     feed_id TEXT NOT NULL,                    -- 所属 RSS 源
     url TEXT NOT NULL,                        -- 文章链接
+    image_url TEXT DEFAULT '',                -- 图片 URL
     published_at TEXT,                        -- RSS 发布时间（ISO 格式）
     summary TEXT,                             -- 摘要/描述
     author TEXT,                              -- 作者

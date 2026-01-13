@@ -139,7 +139,7 @@ class ParserService:
             placeholders = ','.join(['?' for _ in platform_ids])
             query = f"""
                 SELECT n.id, n.platform_id, p.name as platform_name, n.title,
-                       n.rank, n.url, n.mobile_url,
+                       n.rank, n.url, n.mobile_url, n.image_url,
                        n.first_crawl_time, n.last_crawl_time, n.crawl_count
                 FROM news_items n
                 LEFT JOIN platforms p ON n.platform_id = p.id
@@ -149,7 +149,7 @@ class ParserService:
         else:
             cursor.execute("""
                 SELECT n.id, n.platform_id, p.name as platform_name, n.title,
-                       n.rank, n.url, n.mobile_url,
+                       n.rank, n.url, n.mobile_url, n.image_url,
                        n.first_crawl_time, n.last_crawl_time, n.crawl_count
                 FROM news_items n
                 LEFT JOIN platforms p ON n.platform_id = p.id
@@ -194,6 +194,7 @@ class ParserService:
                 "ranks": ranks,
                 "url": row['url'] or "",
                 "mobileUrl": row['mobile_url'] or "",
+                "image_url": row['image_url'] or "",
                 "first_time": row['first_crawl_time'] or "",
                 "last_time": row['last_crawl_time'] or "",
                 "count": row['crawl_count'] or 1,
@@ -240,7 +241,7 @@ class ParserService:
             placeholders = ','.join(['?' for _ in feed_ids])
             query = f"""
                 SELECT i.id, i.feed_id, f.name as feed_name, i.title,
-                       i.url, i.published_at, i.summary, i.author,
+                       i.url, i.published_at, i.summary, i.author, i.image_url,
                        i.first_crawl_time, i.last_crawl_time, i.crawl_count
                 FROM rss_items i
                 LEFT JOIN rss_feeds f ON i.feed_id = f.id
@@ -251,7 +252,7 @@ class ParserService:
         else:
             cursor.execute("""
                 SELECT i.id, i.feed_id, f.name as feed_name, i.title,
-                       i.url, i.published_at, i.summary, i.author,
+                       i.url, i.published_at, i.summary, i.author, i.image_url,
                        i.first_crawl_time, i.last_crawl_time, i.crawl_count
                 FROM rss_items i
                 LEFT JOIN rss_feeds f ON i.feed_id = f.id
@@ -276,6 +277,7 @@ class ParserService:
                 "published_at": row['published_at'] or "",
                 "summary": row['summary'] or "",
                 "author": row['author'] or "",
+                "image_url": row['image_url'] or "",
                 "first_time": row['first_crawl_time'] or "",
                 "last_time": row['last_crawl_time'] or "",
                 "count": row['crawl_count'] or 1,
