@@ -15,6 +15,7 @@ app:
   # 完整时区列表: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
   timezone: "Asia/Shanghai"
   show_version_update: true           # 显示版本更新提示
+  web_url: ""                         # 部署后的 Web 访问地址 (例如 http://192.168.1.100:8000)，用于生成图片链接
 
 
 # ===============================================================
@@ -139,7 +140,7 @@ notification:
   
   # 消息去重配置
   deduplication:
-    enabled: false                    # 是否开启去重功能
+    enabled: true                     # 是否开启去重功能
     use_url_hash: true                # 是否使用 URL Hash 作为唯一标识（推荐）
                                       # true = URL Hash (更准), false = Title + Source
 
@@ -219,13 +220,10 @@ storage:
     retention_days: 0                 # 保留天数（0=永久保留）
     # S3 兼容配置（或使用环境变量 S3_ENDPOINT_URL 等）
     endpoint_url: ""                  # 服务端点
-                                      # Cloudflare R2: https://<account_id>.r2.cloudflarestorage.com
-                                      # 阿里云 OSS: https://oss-cn-hangzhou.aliyuncs.com
-                                      # 腾讯云 COS: https://cos.ap-guangzhou.myqcloud.com
     bucket_name: ""                   # 存储桶名称
     access_key_id: ""                 # 访问密钥 ID
     secret_access_key: ""             # 访问密钥
-    region: ""                        # 区域（可选，部分服务商需要）
+    region: ""                        # 区域（可选）
 
   # 数据拉取配置（从远程同步到本地）
   # 用于 MCP Server 等场景：爬虫存到远程，MCP 拉取到本地分析
@@ -275,3 +273,23 @@ advanced:
     slack: 4000
   batch_send_interval: 3              # 批次发送间隔（秒）
   feishu_message_separator: "━━━━━━━━━━━━━━━━━━━"
+
+
+# ===============================================================
+# 8. 智能分析 (LLM)
+# ===============================================================
+llm:
+  enabled: false                      # 是否启用 LLM 分析
+  provider: "ollama"                  # 提供商: ollama | openai
+  
+  # API 配置
+  base_url: "http://localhost:11434"  # API 基础地址
+  api_key: ""                        # API Key (Ollama 可留空)
+  model: "qwen2.5:7b"                 # 模型名称
+  
+  # 评分配置
+  score_threshold: 6.0                # 评分阈值 (0-10分)，低于此分数的文章将被过滤或标记为低质量
+  batch_size: 10                      # 批处理大小 (单次请求分析的标题数量)
+  
+  # 提示词配置 (可选，留空使用内置默认值)
+  prompt_template: ""

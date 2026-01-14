@@ -15,49 +15,74 @@ services:
       - ../output:/app/output
 
     environment:
-      - TZ=Asia/Shanghai
-      # 核心配置
-      - ENABLE_CRAWLER=${ENABLE_CRAWLER:-}
-      - ENABLE_NOTIFICATION=${ENABLE_NOTIFICATION:-}
-      - REPORT_MODE=${REPORT_MODE:-}
-      - DISPLAY_MODE=${DISPLAY_MODE:-}
-      # Web 服务器
-      - ENABLE_WEBSERVER=${ENABLE_WEBSERVER:-false}
-      - WEBSERVER_PORT=${WEBSERVER_PORT:-8080}
+      - TZ=${TZ:-Asia/Shanghai}
+      - TIMEZONE=${TIMEZONE:-Asia/Shanghai}
+      - WEB_URL=${WEB_URL:-}
+      # 核心开关
+      - ENABLE_CRAWLER=${ENABLE_CRAWLER:-true}
+      - ENABLE_NOTIFICATION=${ENABLE_NOTIFICATION:-true}
+      # 报告生成
+      - REPORT_MODE=${REPORT_MODE:-current}
+      - DISPLAY_MODE=${DISPLAY_MODE:-keyword}
+      - REPORT_TITLE=${REPORT_TITLE:-热点资讯追踪}
+      - MAX_NEWS_PER_KEYWORD=${MAX_NEWS_PER_KEYWORD:-0}
+      - SORT_BY_POSITION_FIRST=${SORT_BY_POSITION_FIRST:-false}
+      - REVERSE_CONTENT_ORDER=${REVERSE_CONTENT_ORDER:-false}
+      # 通知通用
+      - MAX_NOTIFY_NEWS=${MAX_NOTIFY_NEWS:-5}
+      - MAX_ACCOUNTS_PER_CHANNEL=${MAX_ACCOUNTS_PER_CHANNEL:-3}
       # 通知渠道
+      - WEWORK_WEBHOOK_URL=${WEWORK_WEBHOOK_URL:-}
+      - WEWORK_MSG_TYPE=${WEWORK_MSG_TYPE:-textcard}
       - FEISHU_WEBHOOK_URL=${FEISHU_WEBHOOK_URL:-}
+      - DINGTALK_WEBHOOK_URL=${DINGTALK_WEBHOOK_URL:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
-      - DINGTALK_WEBHOOK_URL=${DINGTALK_WEBHOOK_URL:-}
-      - WEWORK_WEBHOOK_URL=${WEWORK_WEBHOOK_URL:-}
-      - WEWORK_MSG_TYPE=${WEWORK_MSG_TYPE:-}
-      - WEB_URL=${WEB_URL:-}
-      - MAX_NOTIFY_NEWS=${MAX_NOTIFY_NEWS:-}
-      - REPORT_TITLE=${REPORT_TITLE:-}
+      - BARK_URL=${BARK_URL:-}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - NTFY_SERVER_URL=${NTFY_SERVER_URL:-https://ntfy.sh}
+      - NTFY_TOPIC=${NTFY_TOPIC:-}
+      - NTFY_TOKEN=${NTFY_TOKEN:-}
       # 邮件配置
       - EMAIL_FROM=${EMAIL_FROM:-}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
       - EMAIL_TO=${EMAIL_TO:-}
       - EMAIL_SMTP_SERVER=${EMAIL_SMTP_SERVER:-}
       - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-}
-      # ntfy配置
-      - NTFY_SERVER_URL=${NTFY_SERVER_URL:-https://ntfy.sh}
-      - NTFY_TOPIC=${NTFY_TOPIC:-}
-      - NTFY_TOKEN=${NTFY_TOKEN:-}
-      # Bark配置
-      - BARK_URL=${BARK_URL:-}
-      # Slack配置
-      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
-      # 远程存储配置（S3 兼容协议）
+      # 推送窗口
+      - PUSH_WINDOW_ENABLED=${PUSH_WINDOW_ENABLED:-false}
+      - PUSH_WINDOW_ONCE_PER_DAY=${PUSH_WINDOW_ONCE_PER_DAY:-true}
+      - PUSH_WINDOW_START=${PUSH_WINDOW_START:-09:00}
+      - PUSH_WINDOW_END=${PUSH_WINDOW_END:-21:00}
+      # 存储配置
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-auto}
+      - STORAGE_TXT_ENABLED=${STORAGE_TXT_ENABLED:-false}
+      - STORAGE_HTML_ENABLED=${STORAGE_HTML_ENABLED:-true}
+      - LOCAL_RETENTION_DAYS=${LOCAL_RETENTION_DAYS:-7}
+      - REMOTE_RETENTION_DAYS=${REMOTE_RETENTION_DAYS:-0}
+      - PULL_ENABLED=${PULL_ENABLED:-false}
+      - PULL_DAYS=${PULL_DAYS:-7}
+      # S3 兼容协议
       - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
       - S3_BUCKET_NAME=${S3_BUCKET_NAME:-}
       - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-}
       - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-}
       - S3_REGION=${S3_REGION:-}
+      # 智能分析 (LLM)
+      - LLM_ENABLED=${LLM_ENABLED:-false}
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://localhost:11434}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-qwen2.5:7b}
+      # RSS 代理
+      - RSS_USE_PROXY=${RSS_USE_PROXY:-false}
+      - RSS_PROXY_URL=${RSS_PROXY_URL:-}
       # 运行模式
-      - CRON_SCHEDULE=${CRON_SCHEDULE:-*/30 * * * *}
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-0 * * * *}
       - RUN_MODE=${RUN_MODE:-cron}
-      - IMMEDIATE_RUN=${IMMEDIATE_RUN:-true}
+      - IMMEDIATE_RUN=${IMMEDIATE_RUN:-false}
+      - ENABLE_WEBSERVER=${ENABLE_WEBSERVER:-true}
+      - WEBSERVER_PORT=${WEBSERVER_PORT:-33888}
 
   trendradar-mcp:
     image: wantcat/trendradar-mcp:latest

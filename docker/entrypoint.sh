@@ -2,10 +2,21 @@
 set -e
 
 # 检查配置文件
-if [ ! -f "/app/config/config.yaml" ] || [ ! -f "/app/config/frequency_words.txt" ]; then
-    echo "❌ 配置文件缺失"
+if [ ! -f "/app/config/config.yaml" ]; then
+    echo "❌ 配置文件 config.yaml 缺失"
     exit 1
 fi
+
+if [ ! -f "/app/config/frequency_words.txt" ]; then
+    if [ -f "/app/config/frequency_words.txt.template" ]; then
+        echo "💡 frequency_words.txt 缺失，正在从模板初始化..."
+        cp /app/config/frequency_words.txt.template /app/config/frequency_words.txt
+    else
+        echo "❌ 配置文件 frequency_words.txt 且模板均缺失"
+        exit 1
+    fi
+fi
+    echo "✅ 配置文件检查通过"
 
 # 保存环境变量
 env >> /etc/environment

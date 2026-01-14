@@ -50,11 +50,19 @@ RUN set -ex && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# 安装 uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# 同步依赖
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-cache
+
+# 将虚拟环境的可执行文件路径添加到 PATH
+ENV PATH="/app/.venv/bin:$PATH"
 
 COPY docker/manage.py .
-COPY trendradar/ ./trendradar/
+COPY src/ ./src/
+ENV PYTHONPATH=/app/src
 
 # 复制 entrypoint.sh 并强制转换为 LF 格式
 COPY docker/entrypoint.sh /entrypoint.sh.tmp

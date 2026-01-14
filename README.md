@@ -1,15 +1,14 @@
 <div align="center" id="trendradar">
 
-<img src="/_image/banner.webp" alt="TrendRadar Banner" width="80%">
+<img src="./_image/banner.webp" alt="TrendRadar Banner" width="80%">
 
 ### TrendRadar (MisonL 版)
 
-**最快 30 秒部署的热点助手 —— 告别无效刷屏，只看真正关心的财经资讯**
+**最快 30 秒部署的热点助手 —— 自动追踪热点资讯，只推送您关心的内容**
 
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v4.7.1-blue.svg)](https://github.com/MisonL/TrendRadar)
+[![Version](https://img.shields.io/badge/version-v5.0.0-blue.svg)](https://github.com/MisonL/TrendRadar)
 [![Docker](https://img.shields.io/badge/Docker-部署-2496ED?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/r/wantcat/trendradar)
-[![Financial Focus](https://img.shields.io/badge/内容聚焦-财经/A股-gold.svg?style=flat-square)](config/frequency_words.txt)
 
 </div>
 
@@ -19,7 +18,7 @@
 
 本项目是基于 [sansan0/TrendRadar](https://github.com/sansan0/TrendRadar) 构建的**独立二次开发版本**。
 
-- **独立开发**：本项目后续将保持独立演进，重点优化财经内参、A 股异动追踪及企业微信高端推送功能。
+- **独立开发**：本项目后续将保持独立演进，专注于提升热点抓取、智能过滤及多渠道推送体验。
 - **不提交 PR**：除非另有说明，本项目的所有改动将不会提交至上游原仓库。
 - **项目地址**：[https://github.com/MisonL/TrendRadar](https://github.com/MisonL/TrendRadar)
 
@@ -28,10 +27,13 @@
 ## ✨ 核心特性
 
 - 🚀 **极速部署**：支持 Docker Compose，配置即用。
-- 📊 **财经内参**：深度聚焦 A 股、港股、美股。实时追踪板块热点、主力资金与机会捕捉。
-- 📱 **完美通知**：企业微信“公众号风格”图文列表消息推送，视觉体验全面复刻。
-- 🛡️ **私有可控**：支持局域网内网访问，数据本地化存储（SQLite）。
-- 🤖 **AI 赋能**：内置支持 MCP 协议，可接入 AI 模型进行深度舆情分析。
+- 🔍 **灵活聚焦**：通过 `config/frequency_words.txt` 自定义关注的关键词和话题领域。
+- 📱 **完美通知**：企业微信"公众号风格"图文列表消息推送，支持**本地图片加速**与自动去重。
+- 🛡️ **私有可控**：支持局域网内网访问，数据本地化存储（SQLite + **DuckDB**）。
+- ⚡ **极致性能**：全异步（Asyncio）并发抓取架构，毫秒级热点聚合分析。
+- 🧠 **AI 降噪**：内置 **LLM 智能语义过滤**，自动剔除垃圾内容，只保留高价值信息。
+- 🤖 **AI 自动配置**：通过指令即可让 AI 为您感兴趣的领域自动生成关键词过滤规则，零门槛上手。
+- 📡 **MCP 支持**：支持 MCP 协议，可接入 Cherry Studio 等客户端进行深度舆情问答。
 
 ---
 
@@ -59,15 +61,29 @@ cp .env.template .env
 docker-compose up -d
 ```
 
+### 🤖 4. AI 关键词助手 (可选)
+
+当您想关注某个新领域（如：低空经济、半导体等）但不想手动写正则时，可以使用内置的 AI 工具自动生成：
+
+```bash
+# 生成并创建（或覆盖）配置
+python3 scripts/generate_keywords.py "低空经济与无人机"
+
+# 在现有配置上追加新领域
+python3 scripts/generate_keywords.py "半导体与华为产业链" --append
+```
+
+_注：需在 `.env` 中开启并配置好 LLM (Ollama/OpenAI) 接口。_
+
 ---
 
 ## 📑 导航文档
 
 为了保持页面整洁，详细技术细节已移至专用文档：
 
-- **[📖 技术架构 (Architecture)](ARCHITECTURE.md)**：深入了解爬虫原理、数据流向与模块设计。
+- **[📖 技术架构 (Architecture)](docs/ARCHITECTURE.md)**：深入了解爬虫原理、数据流向与模块设计。
 - **[📜 变更日志 (Changelog)](CHANGELOG.md)**：查看版本更迭与最新优化。
-- **[⚙️ 原版详细配置参考](README-EN.md)**：查看原项目的详细配置指南。
+- **[🤖 MCP 使用指南](docs/README-Cherry-Studio.md)**：接入 Cherry Studio 进行舆情问答。
 
 ---
 

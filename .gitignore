@@ -151,4 +151,29 @@ Thumbs.db
 output/
 data/
 *.db
+*.duckdb
+*.duckdb.wal
 run.log
+
+# Generated HTML reports (should not be committed)
+index.html
+
+# Docker compose override (local only)
+docker/docker-compose.override.yml
+
+# Local config overrides
+config/*.local.yaml
+config/*.local.yml
+
+# Cache directories
+.cache/
+*.cache
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*~
+
+# Ruff cache
+.ruff_cache/
