@@ -244,6 +244,36 @@ class AsyncDataFetcher:
         
         async def fetch_and_extract_og(source_id, title, target_url):
             try:
+                # 针对 WallstreetCN 的特殊处理 (SPA 无法直接提取)
+                if "wallstreetcn.com/articles/" in target_url:
+                    try:
+                        article_id = target_url.split("/articles/")[-1].split("?")[0]
+                        api_url = f"https://api-prod.wallstreetcn.com/apiv1/content/articles/{article_id}?extract=0"
+                        
+                        if self.client:
+                            resp = await self.client.get(api_url)
+                        else:
+                            async with httpx.AsyncClient(**self.client_args) as client:
+                                resp = await client.get(api_url)
+                                
+                        if resp.status_code == 200:
+                            data = resp.json().get("data", {})
+                            # 优先使用封面图
+                            img_url = data.get("image_uri")
+                            
+                            # 如果没有封面图，尝试从内容中提取
+                            if not img_url and data.get("content"):
+                                img_url = extract_main_image(data["content"], target_url)
+                                
+                            if img_url:
+                                logger.info(f"[爬虫] WSCN API 提取成功 [{source_id}] {title[:10]}... => {img_url}")
+                                results[source_id][title]["image_url"] = img_url
+                                return
+                    except Exception as e:
+                        logger.warning(f"[爬虫] WSCN API 提取失败: {e}")
+                        # 失败后继续尝试通用方法（虽然大概率也会失败）
+
+                # 通用逻辑
                 # 随机User-Agent避免被反爬
                 headers = self.DEFAULT_HEADERS.copy()
                 

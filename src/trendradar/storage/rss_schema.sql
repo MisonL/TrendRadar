@@ -31,3 +31,14 @@ CREATE TABLE IF NOT EXISTS rss_crawl_records (
     total_items INTEGER,
     created_at TEXT
 );
+
+-- RSS 抓取状态详情
+CREATE TABLE IF NOT EXISTS rss_crawl_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    crawl_record_id INTEGER,
+    feed_id TEXT,
+    status TEXT, -- 'success' or 'failed'
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (crawl_record_id) REFERENCES rss_crawl_records(id),
+    UNIQUE(crawl_record_id, feed_id)
+);

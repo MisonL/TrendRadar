@@ -499,7 +499,7 @@ class NewsAnalyzer:
 
             # 检查去重后是否还有内容
             has_filtered_news = any(len(stat["titles"]) > 0 for stat in filtered_report_data.get("stats", []))
-            has_filtered_rss = len(rss_items) > 0
+            has_filtered_rss = len(rss_items or []) > 0
             
             # 如果去重后没有新闻，且没有RSS，则跳过
             if self.ctx.config["NOTIFICATION"].get("deduplication", {}).get("enabled", False):
