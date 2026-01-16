@@ -5,7 +5,7 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范，
 版本号遵循 [语义化版本 2.0.0](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [5.0.1] - 2026-01-16
+## [5.1.0] - 2026-01-16
 
 ### 新增 (Added)
 
@@ -14,6 +14,8 @@
 ### 优化 (Improved)
 
 - **Premium 网页 UI**: 全面重构 HTML 报告样式，采用卡片式布局、Indigo-Violet 渐变 Header、毛玻璃效果及 Pill Badges 徽章系统，提升视觉层级与阅读体验。
+
+## [5.0.1] - 2026-01-16
 
 ### 修复 (Fixed)
 
