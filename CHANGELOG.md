@@ -5,6 +5,14 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范，
 版本号遵循 [语义化版本 2.0.0](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [5.0.1] - 2026-01-16
+
+### 修复 (Fixed)
+
+- **核心崩溃修复**: 修复了 RSS 抓取时 `rss_items` 为空导致的 `NoneType` 异常。
+- **数据库缺失**: 补全了 `rss_schema.sql` 中缺失的 `rss_crawl_status` 表定义。
+- **图片提取增强**: 针对 WallstreetCN 增加了专用 API 抓取逻辑，解决了 SPA 页面无法提取图片的问题。
+
 ## [5.0.0] - 2026-01-14
 
 ### 新增 (Added)
