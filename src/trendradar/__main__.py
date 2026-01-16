@@ -1005,6 +1005,7 @@ class NewsAnalyzer:
                     global_filters=global_filters,
                     rss_items=rss_items,
                     rss_new_items=rss_new_items,
+                    rss_raw_items=rss_raw_items,
                 )
 
                 combined_id_to_name = {**historical_id_to_name, **id_to_name}
