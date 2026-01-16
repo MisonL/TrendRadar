@@ -962,6 +962,7 @@ class NewsAnalyzer:
         self, mode_strategy: Dict, results: Dict, id_to_name: Dict, failed_ids: List,
         rss_items: Optional[List[Dict]] = None,
         rss_new_items: Optional[List[Dict]] = None,
+        rss_raw_items: Optional[List[Dict]] = None,
     ) -> Optional[str]:
         """执行模式特定逻辑，支持热榜+RSS合并推送"""
         # 获取当前监控平台ID列表
