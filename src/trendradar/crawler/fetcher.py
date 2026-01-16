@@ -11,12 +11,10 @@ import json
 import random
 import logging
 from typing import Dict, List, Tuple, Optional, Union
-import httpx
-import asyncio
-import sys
 
 from trendradar.utils.image import is_valid_image_url
 from trendradar.utils.image import extract_og_image, extract_main_image
+from trendradar.utils.url import normalize_url
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +42,6 @@ class AsyncDataFetcher:
     ):
         """
         初始化数据获取器
-
-        Args:
-            proxy_url: 代理服务器 URL（可选）
-            api_url: API 基础 URL（可选）
-            max_concurrency: 最大并发数
         """
         self.proxy_url = proxy_url
         self.api_url = api_url or self.DEFAULT_API_URL
@@ -64,20 +57,38 @@ class AsyncDataFetcher:
             
         self.client = client
 
+    async def _fetch_wscn_api(self, client: httpx.AsyncClient) -> List[Dict]:
+        """专门处理华尔街见闻 API 抓取"""
+        url = "https://api-prod.wallstreetcn.com/apiv1/content/fabric/articles/selected?limit=20"
+        try:
+            resp = await client.get(url, timeout=10.0)
+            resp.raise_for_status()
+            data = resp.json()
+            items = []
+            for article in data.get("data", {}).get("items", []):
+                resource = article.get("resource", {})
+                title = resource.get("title", article.get("title", ""))
+                link = resource.get("uri", article.get("uri", ""))
+                image = resource.get("image_uri", article.get("image_uri", ""))
+                
+                if title:
+                    items.append({
+                        "title": title,
+                        "url": link,
+                        "image_url": image
+                    })
+            return items
+        except Exception as e:
+            logger.error(f"[Crawler] WSCN API 抓取失败: {e}")
+            return []
+
     async def fetch_data(
         self,
         client: httpx.AsyncClient,
         id_info: Union[str, Tuple[str, str]],
         max_retries: int = 2,
     ) -> Tuple[Optional[str], str, str]:
-        """
-        异步获取指定ID数据
-
-        使用更精细的异常处理，区分不同类型的错误
-
-        Returns:
-            (响应文本, 平台ID, 别名)
-        """
+        """异步获取指定ID数据"""
         if isinstance(id_info, tuple):
             id_value, alias = id_info
         else:
@@ -91,84 +102,23 @@ class AsyncDataFetcher:
                 try:
                     response = await client.get(url)
                     response.raise_for_status()
-
-                    data_text = response.text
-                    data_json = json.loads(data_text)
-
-                    status = data_json.get("status", "未知")
-                    if status not in ["success", "cache"]:
-                        raise ValueError(f"响应状态异常: {status}")
-
-                    return data_text, id_value, alias
-
-                except httpx.TimeoutException as e:
-                    # 超时错误：立即重试
-                    logger.warning(f"请求 {id_value} 超时 (重试 {attempt + 1}/{max_retries}): {e}")
-                    if attempt < max_retries:
-                        wait_time = 1.0 + attempt  # 短等待时间
-                        await asyncio.sleep(wait_time)
-                    else:
-                        logger.error(f"请求 {id_value} 最终超时失败: {e}")
-                        return None, id_value, alias
-
-                except httpx.ConnectError as e:
-                    # 连接错误：指数退避
-                    logger.warning(f"请求 {id_value} 连接失败 (重试 {attempt + 1}/{max_retries}): {e}")
-                    if attempt < max_retries:
-                        wait_time = 2 ** attempt  # 指数退避
-                        await asyncio.sleep(wait_time)
-                    else:
-                        logger.error(f"请求 {id_value} 最终连接失败: {e}")
-                        return None, id_value, alias
-
-                except httpx.NetworkError as e:
-                    # 网络错误：指数退避
-                    logger.warning(f"请求 {id_value} 网络错误 (重试 {attempt + 1}/{max_retries}): {e}")
-                    if attempt < max_retries:
-                        wait_time = 2 ** attempt
-                        await asyncio.sleep(wait_time)
-                    else:
-                        logger.error(f"请求 {id_value} 最终网络错误: {e}")
-                        return None, id_value, alias
-
-                except httpx.HTTPStatusError as e:
-                    # HTTP 错误：4xx 不重试，5xx 重试
-                    status_code = e.response.status_code
-                    logger.warning(f"请求 {id_value} HTTP 错误 {status_code}: {e}")
-
-                    if 400 <= status_code < 500:
-                        # 4xx 错误不重试（客户端错误）
-                        logger.error(f"请求 {id_value} 客户端错误 {status_code}，不重试")
-                        return None, id_value, alias
-                    elif 500 <= status_code < 600:
-                        # 5xx 错误重试（服务器错误）
-                        if attempt < max_retries:
-                            wait_time = 2 ** attempt
-                            await asyncio.sleep(wait_time)
-                        else:
-                            logger.error(f"请求 {id_value} 最终服务器错误 {status_code}")
+                    
+                    # 检查业务逻辑状态
+                    try:
+                        resp_json = response.json()
+                        if isinstance(resp_json, dict) and resp_json.get("status") == "error":
+                            logger.error(f"接口返回错误 ({id_value}): {resp_json.get('message', '未知错误')}")
                             return None, id_value, alias
-
-                except json.JSONDecodeError as e:
-                    # JSON 解析错误：不重试
-                    logger.error(f"请求 {id_value} JSON 解析失败: {e}")
-                    return None, id_value, alias
-
-                except ValueError as e:
-                    # 响应状态异常：不重试
-                    logger.error(f"请求 {id_value} 响应状态异常: {e}")
-                    return None, id_value, alias
-
+                    except Exception:
+                        # 非 JSON 或解析失败，按原始文本处理
+                        pass
+                        
+                    return response.text, id_value, alias
                 except Exception as e:
-                    # 其他未知错误：记录详细日志并重试
-                    logger.error(f"请求 {id_value} 未知错误 (重试 {attempt + 1}/{max_retries}): {e}")
                     if attempt < max_retries:
-                        wait_time = random.uniform(1, 3) + attempt
-                        await asyncio.sleep(wait_time)
+                        await asyncio.sleep(1.0 * (attempt + 1))
                     else:
-                        logger.error(f"请求 {id_value} 最终失败: {e}")
-                        return None, id_value, alias
-
+                        logger.error(f"请求 {id_value} 失败: {e}")
         return None, id_value, alias
 
     async def crawl_websites(
@@ -176,9 +126,7 @@ class AsyncDataFetcher:
         ids_list: List[Union[str, Tuple[str, str]]],
         request_interval: int = 100,
     ) -> Tuple[Dict, Dict, List]:
-        """
-        并发抓取多个平台数据
-        """
+        """并发抓取多个平台数据"""
         results = {}
         id_to_name = {}
         failed_ids = []
@@ -190,143 +138,103 @@ class AsyncDataFetcher:
             else:
                 id_to_name[id_info] = id_info
 
-        # 并发执行
-        if self.client:
-            tasks = [self.fetch_data(self.client, id_str) for id_str in ids_list]
-            responses = await asyncio.gather(*tasks)
-        else:
-            async with httpx.AsyncClient(**self.client_args) as client:
-                tasks = [self.fetch_data(client, id_str) for id_str in ids_list]
-                responses = await asyncio.gather(*tasks)
-
-        # 解析结果
-        for data_text, id_value, alias in responses:
-            if not data_text:
-                failed_ids.append(id_value)
-                continue
-                
-            try:
-                data = json.loads(data_text)
-                results[id_value] = {}
-                
-                # 遍历条目并去重/格式化
-                for index, item in enumerate(data.get("items", []), 1):
-                    title = item.get("title")
-                    if not title or not str(title).strip():
-                        continue
-                        
-                    title = str(title).strip()
-                    url = item.get("url", "")
-                    mobile_url = item.get("mobileUrl", "")
-
-                    if title in results[id_value]:
-                        results[id_value][title]["ranks"].append(index)
-                    else:
-                        results[id_value][title] = {
-                            "ranks": [index],
-                            "url": url,
-                            "mobileUrl": mobile_url,
-                            "image_url": "",
-                        }
-                    
-                    # 提取封面图
-                    image_url = item.get("pic") or item.get("img") or item.get("cover") or item.get("thumbnail")
-                    if image_url and is_valid_image_url(image_url):
-                        results[id_value][title]["image_url"] = image_url
-            
-            except Exception as e:
-                logger.error(f"处理 {id_value} 数据出错: {e}")
-                failed_ids.append(id_value)
-
-        # 二次处理：为 Top 5 且没有图片的条目抓取 og:image
-        # 为了不拖慢整体速度，限制并发和数量
-        tasks_enrich = []
-        
-        async def fetch_and_extract_og(source_id, title, target_url):
-            try:
-                # 针对 WallstreetCN 的特殊处理 (SPA 无法直接提取)
-                if "wallstreetcn.com/articles/" in target_url:
-                    try:
-                        article_id = target_url.split("/articles/")[-1].split("?")[0]
-                        api_url = f"https://api-prod.wallstreetcn.com/apiv1/content/articles/{article_id}?extract=0"
-                        
-                        if self.client:
-                            resp = await self.client.get(api_url)
-                        else:
-                            async with httpx.AsyncClient(**self.client_args) as client:
-                                resp = await client.get(api_url)
-                                
-                        if resp.status_code == 200:
-                            data = resp.json().get("data", {})
-                            # 优先使用封面图
-                            img_url = data.get("image_uri")
-                            
-                            # 如果没有封面图，尝试从内容中提取
-                            if not img_url and data.get("content"):
-                                img_url = extract_main_image(data["content"], target_url)
-                                
-                            if img_url:
-                                logger.info(f"[爬虫] WSCN API 提取成功 [{source_id}] {title[:10]}... => {img_url}")
-                                results[source_id][title]["image_url"] = img_url
-                                return
-                    except Exception as e:
-                        logger.warning(f"[爬虫] WSCN API 提取失败: {e}")
-                        # 失败后继续尝试通用方法（虽然大概率也会失败）
-
-                # 通用逻辑
-                # 随机User-Agent避免被反爬
-                headers = self.DEFAULT_HEADERS.copy()
-                
-                # 增加随机延时
-                await asyncio.sleep(random.uniform(0.1, 0.5))
-                
+        # 分类 ID
+        normal_ids = []
+        for id_info in ids_list:
+            p_id = id_info[0] if isinstance(id_info, tuple) else id_info
+            if p_id == "wscn":
                 if self.client:
-                    resp = await self.client.get(target_url, headers=headers, follow_redirects=True)
+                    wscn_items = await self._fetch_wscn_api(self.client)
                 else:
                     async with httpx.AsyncClient(**self.client_args) as client:
-                        resp = await client.get(target_url, headers=headers, follow_redirects=True)
+                        wscn_items = await self._fetch_wscn_api(client)
                 
-                if resp.status_code == 200:
-                    # 优先尝试 og:image
-                    img_url = extract_og_image(resp.text)
-                    
-                    # 回退尝试提取正文第一张大图
-                    if not img_url:
-                        img_url = extract_main_image(resp.text, target_url)
-
-                    if img_url:
-                        logger.info(f"[爬虫] 成功提取图片 [{source_id}] {title[:10]}... => {img_url}")
-                        results[source_id][title]["image_url"] = img_url
-                    else:
-                        logger.warning(f"[爬虫] 未提取到图片 [{source_id}] {title[:10]}... URL: {target_url} Status: {resp.status_code}")
+                if wscn_items:
+                    results["wscn"] = {}
+                    for i, item in enumerate(wscn_items):
+                        results["wscn"][item["title"]] = {
+                            "ranks": [i + 1],
+                            "url": item["url"],
+                            "mobileUrl": item["url"],
+                            "image_url": item["image_url"]
+                        }
                 else:
-                    logger.error(f"[爬虫] 请求失败 [{source_id}] {title[:10]}... URL: {target_url} Status: {resp.status_code}")
-            except Exception as e:
-                # 忽略单个页面抓取错误
-                pass
+                    failed_ids.append("wscn")
+            else:
+                normal_ids.append(id_info)
 
-        for source_id, items_dict in results.items():
-            # items_dict: {title: {ranks: [1], ...}}
-            sorted_items = sorted(items_dict.items(), key=lambda x: min(x[1]["ranks"]) if x[1]["ranks"] else 999)
+        # 抓取通用平台
+        if normal_ids:
+            if self.client:
+                responses = await asyncio.gather(*[self.fetch_data(self.client, i) for i in normal_ids])
+            else:
+                async with httpx.AsyncClient(**self.client_args) as client:
+                    responses = await asyncio.gather(*[self.fetch_data(client, i) for i in normal_ids])
             
-            count = 0
-            for title, info in sorted_items:
-                if count >= 5:
-                    break
-                
-                if not info.get("image_url") and info.get("url"):
-                    tasks_enrich.append(fetch_and_extract_og(source_id, title, info["url"]))
-                    count += 1
-        
-        if tasks_enrich:
-            logger.info(f"[爬虫] 正在为 {len(tasks_enrich)} 个热门条目补充图片...")
-            # 使用现有信号量或新信号量限制并发
-            # 为了避免长时间阻塞，使用 wait_for
-            try:
-                await asyncio.wait_for(asyncio.gather(*tasks_enrich), timeout=15.0)
-            except asyncio.TimeoutError:
-                logger.warning("[爬虫] 图片补充任务部分超时")
-            except Exception as e:
-                logger.error(f"图片补充任务出错: {e}")
+            for text, p_id, _ in responses:
+                if not text:
+                    failed_ids.append(p_id)
+                    continue
+                try:
+                    data = json.loads(text)
+                    results[p_id] = {}
+                    for idx, item in enumerate(data.get("items", []), 1):
+                        title = str(item.get("title", "")).strip()
+                        if not title: continue
+                        url = item.get("url", "")
+                        if title in results[p_id]:
+                             results[p_id][title]["ranks"].append(idx)
+                        else:
+                             results[p_id][title] = {
+                                 "ranks": [idx],
+                                 "url": url,
+                                 "mobileUrl": item.get("mobileUrl", ""),
+                                 "image_url": item.get("pic") or item.get("img") or ""
+                             }
+                except Exception as e:
+                    logger.error(f"解析 {p_id} 失败: {e}")
+                    failed_ids.append(p_id)
 
+        # 补充图片
+        await self._enrich_images(results)
         return results, id_to_name, failed_ids
+
+    async def _enrich_images(self, results: Dict) -> None:
+        """为 Top 条目补充图片"""
+        tasks = []
+        for p_id, items in results.items():
+            sorted_items = sorted(items.items(), key=lambda x: min(x[1]["ranks"]) if x[1]["ranks"] else 999)
+            for title, info in sorted_items[:5]:
+                if not info.get("image_url") and info.get("url"):
+                    tasks.append(self._fetch_and_set_image(p_id, title, info["url"], results))
+        
+        if tasks:
+            logger.info(f"[爬虫] 补充 {len(tasks)} 条图片...")
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _fetch_and_set_image(self, p_id: str, title: str, url: str, results: Dict) -> None:
+        """补充单个条目的图片"""
+        try:
+            # WSCN 特殊处理 (API 获取详情)
+            if "wallstreetcn.com/articles/" in url:
+                article_id = url.split("/articles/")[-1].split("?")[0]
+                api = f"https://api-prod.wallstreetcn.com/apiv1/content/articles/{article_id}?extract=0"
+                async with httpx.AsyncClient(**self.client_args) as client:
+                    resp = await client.get(api)
+                    if resp.status_code == 200:
+                        data = resp.json().get("data", {})
+                        img = data.get("image_uri")
+                        if img:
+                             results[p_id][title]["image_url"] = img
+                             return
+
+            # 通用处理
+            async with httpx.AsyncClient(**self.client_args) as client:
+                await asyncio.sleep(random.uniform(0.1, 0.5))
+                resp = await client.get(url, follow_redirects=True)
+                if resp.status_code == 200:
+                    img = extract_og_image(resp.text) or extract_main_image(resp.text, url)
+                    if img:
+                        results[p_id][title]["image_url"] = img
+        except Exception:
+            pass

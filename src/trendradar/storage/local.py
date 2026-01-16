@@ -7,8 +7,8 @@
 
 import sqlite3
 import shutil
-import pytz
-import re
+import json
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -38,22 +38,36 @@ class LocalStorageBackend(StorageBackend):
         enable_txt: bool = True,
         enable_html: bool = True,
         timezone: str = "Asia/Shanghai",
+        retention_days: int = 0,
     ):
         """
         初始化本地存储后端
-
+        
         Args:
             data_dir: 数据目录路径
             enable_txt: 是否启用 TXT 快照
             enable_html: 是否启用 HTML 报告
             timezone: 时区配置（默认 Asia/Shanghai）
+            retention_days: 数据保留天数（默认 0 表示永不清理）
         """
         self.data_dir = Path(data_dir)
         self.enable_txt = enable_txt
         self.enable_html = enable_html
         self.timezone = timezone
+        self.retention_days = retention_days
         self._db_connections: Dict[str, sqlite3.Connection] = {}
         self._history_conn: Optional[sqlite3.Connection] = None
+        
+        # 配置日志
+        self.logger = logging.getLogger("TrendRadar.Storage")
+        
+        # 确保目录存在
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        (self.data_dir / "news").mkdir(parents=True, exist_ok=True)
+        (self.data_dir / "rss").mkdir(parents=True, exist_ok=True)
+        
+        # 初始化历史数据库（存储长期跨日数据）
+        self._init_history_db()
 
     @property
     def backend_name(self) -> str:
@@ -109,11 +123,15 @@ class LocalStorageBackend(StorageBackend):
         db_path = str(self._get_db_path(date, db_type))
 
         if db_path not in self._db_connections:
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row
-            self._init_tables(conn, db_type)
-            self._db_connections[db_path] = conn
-
+            try:
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                self._init_tables(conn, db_type)
+                self._db_connections[db_path] = conn
+                self.logger.info(f"[SQLite] 成功连接到数据库: {db_path}")
+            except sqlite3.Error as e:
+                self.logger.error(f"[SQLite] 连接到数据库失败 {db_path}: {e}")
+                raise
         return self._db_connections[db_path]
 
     def _get_schema_path(self, db_type: str = "news") -> Path:
@@ -144,7 +162,9 @@ class LocalStorageBackend(StorageBackend):
             with open(schema_path, "r", encoding="utf-8") as f:
                 schema_sql = f.read()
             conn.executescript(schema_sql)
+            self.logger.info(f"[SQLite] 数据库 {db_type} 表结构初始化完成或已存在。")
         else:
+            self.logger.error(f"[SQLite] Schema 文件未找到: {schema_path}")
             raise FileNotFoundError(f"Schema file not found: {schema_path}")
 
         conn.commit()
@@ -158,7 +178,7 @@ class LocalStorageBackend(StorageBackend):
                 cursor.execute("PRAGMA table_info(news_items)")
                 columns = [info[1] for info in cursor.fetchall()]
                 if "image_url" not in columns:
-                    print("[Schema] 迁移: 添加 image_url 到 news_items")
+                    self.logger.info("[Schema] 迁移: 添加 image_url 到 news_items")
                     cursor.execute("ALTER TABLE news_items ADD COLUMN image_url TEXT DEFAULT ''")
             
             # 2. Check rss_items
@@ -166,12 +186,12 @@ class LocalStorageBackend(StorageBackend):
                 cursor.execute("PRAGMA table_info(rss_items)")
                 columns = [info[1] for info in cursor.fetchall()]
                 if "image_url" not in columns:
-                    print("[Schema] 迁移: 添加 image_url 到 rss_items")
+                    self.logger.info("[Schema] 迁移: 添加 image_url 到 rss_items")
                     cursor.execute("ALTER TABLE rss_items ADD COLUMN image_url TEXT DEFAULT ''")
 
             conn.commit()
         except Exception as e:
-            print(f"[Schema] 迁移警告: {e}")
+            self.logger.warning(f"[Schema] 迁移警告: {e}")
 
         # Schema Migration: 检查并添加缺失的 image_url 列
         if db_type == "news":
@@ -180,193 +200,165 @@ class LocalStorageBackend(StorageBackend):
                 cursor.execute("PRAGMA table_info(news_items)")
                 columns = [info[1] for info in cursor.fetchall()]
                 if "image_url" not in columns:
-                    print("[Schema] 正在迁移数据库: 添加 image_url 列到 news_items")
+                    self.logger.info("[Schema] 正在迁移数据库: 添加 image_url 列到 news_items")
                     cursor.execute("ALTER TABLE news_items ADD COLUMN image_url TEXT DEFAULT ''")
                     conn.commit()
             except Exception as e:
-                print(f"[Schema] 迁移失败: {e}")
+                self.logger.error(f"[Schema] 迁移失败: {e}")
+
+    def _init_history_db(self) -> None:
+        """
+        初始化历史数据库（用于存储长期数据，如推送记录）
+        """
+        try:
+            conn = self._get_history_connection()
+            schema_path = Path(__file__).parent / "history_schema.sql"
+            if schema_path.exists():
+                with open(schema_path, "r", encoding="utf-8") as f:
+                    schema_sql = f.read()
+                conn.executescript(schema_sql)
+                self.logger.info("[SQLite] 历史数据库表结构初始化完成或已存在。")
+            else:
+                self.logger.error(f"[SQLite] 历史 Schema 文件未找到: {schema_path}")
+                raise FileNotFoundError(f"History Schema file not found: {schema_path}")
+            conn.commit()
+        except Exception as e:
+            self.logger.error(f"[SQLite] 初始化历史数据库失败: {e}")
+            raise
 
     def save_news_data(self, data: NewsData) -> bool:
-        """
-        保存新闻数据到 SQLite（以 URL 为唯一标识，支持标题更新检测）
-
-        Args:
-            data: 新闻数据
-
-        Returns:
-            是否保存成功
-        """
+        """保存新闻数据到 SQLite（以 URL 为唯一标识，支持标题更新检测）"""
         try:
             conn = self._get_connection(data.date)
             cursor = conn.cursor()
-
-            # 获取配置时区的当前时间
             now_str = self._get_configured_time().strftime("%Y-%m-%d %H:%M:%S")
 
-            # 首先同步平台信息到 platforms 表
-            for source_id, source_name in data.id_to_name.items():
-                cursor.execute("""
-                    INSERT INTO platforms (id, name, updated_at)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET
-                        name = excluded.name,
-                        updated_at = excluded.updated_at
-                """, (source_id, source_name, now_str))
+            # 1. 同步平台信息
+            self._sync_platforms(cursor, data.id_to_name, now_str)
 
             # 统计计数器
-            new_count = 0
-            updated_count = 0
-            title_changed_count = 0
+            stats = {"new": 0, "updated": 0, "title_changed": 0}
             success_sources = []
 
+            # 2. 遍历处理新闻条目
             for source_id, news_list in data.items.items():
                 success_sources.append(source_id)
-
                 for item in news_list:
-                    try:
-                        # 标准化 URL（去除动态参数，如微博的 band_rank）
-                        normalized_url = normalize_url(item.url, source_id) if item.url else ""
+                    self._process_single_news_item(cursor, item, source_id, data.crawl_time, now_str, stats)
 
-                        # 检查是否已存在（通过标准化 URL + platform_id）
-                        if normalized_url:
-                            cursor.execute("""
-                                SELECT id, title FROM news_items
-                                WHERE url = ? AND platform_id = ?
-                            """, (normalized_url, source_id))
-                            existing = cursor.fetchone()
-
-                            if existing:
-                                # 已存在，更新记录
-                                existing_id, existing_title = existing
-
-                                # 检查标题是否变化
-                                if existing_title != item.title:
-                                    # 记录标题变更
-                                    cursor.execute("""
-                                        INSERT INTO title_changes
-                                        (news_item_id, old_title, new_title, changed_at)
-                                        VALUES (?, ?, ?, ?)
-                                    """, (existing_id, existing_title, item.title, now_str))
-                                    title_changed_count += 1
-
-                                # 记录排名历史
-                                cursor.execute("""
-                                    INSERT INTO rank_history
-                                    (news_item_id, rank, crawl_time, created_at)
-                                    VALUES (?, ?, ?, ?)
-                                """, (existing_id, item.rank, data.crawl_time, now_str))
-
-                                # 更新现有记录
-                                cursor.execute("""
-                                    UPDATE news_items SET
-                                        title = ?,
-                                        rank = ?,
-                                        mobile_url = ?,
-                                        image_url = CASE WHEN ? != '' THEN ? ELSE image_url END,
-                                        last_crawl_time = ?,
-                                        crawl_count = crawl_count + 1,
-                                        updated_at = ?
-                                    WHERE id = ?
-                                """, (item.title, item.rank, item.mobile_url,
-                                      item.image_url, item.image_url,
-                                      data.crawl_time, now_str, existing_id))
-                                updated_count += 1
-                            else:
-                                # 不存在，插入新记录（存储标准化后的 URL）
-                                cursor.execute("""
-                                    INSERT INTO news_items
-                                    (title, platform_id, rank, url, mobile_url, image_url,
-                                     first_crawl_time, last_crawl_time, crawl_count,
-                                     created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                                """, (item.title, source_id, item.rank, normalized_url,
-                                      item.mobile_url, item.image_url, data.crawl_time, data.crawl_time,
-                                      now_str, now_str))
-                                new_id = cursor.lastrowid
-                                # 记录初始排名
-                                cursor.execute("""
-                                    INSERT INTO rank_history
-                                    (news_item_id, rank, crawl_time, created_at)
-                                    VALUES (?, ?, ?, ?)
-                                """, (new_id, item.rank, data.crawl_time, now_str))
-                                new_count += 1
-                        else:
-                            # URL 为空的情况，直接插入（不做去重）
-                            cursor.execute("""
-                                INSERT INTO news_items
-                                (title, platform_id, rank, url, mobile_url, image_url,
-                                 first_crawl_time, last_crawl_time, crawl_count,
-                                 created_at, updated_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                            """, (item.title, source_id, item.rank, "",
-                                  item.mobile_url, item.image_url, data.crawl_time, data.crawl_time,
-                                  now_str, now_str))
-                            new_id = cursor.lastrowid
-                            # 记录初始排名
-                            cursor.execute("""
-                                INSERT INTO rank_history
-                                (news_item_id, rank, crawl_time, created_at)
-                                VALUES (?, ?, ?, ?)
-                            """, (new_id, item.rank, data.crawl_time, now_str))
-                            new_count += 1
-
-                    except sqlite3.Error as e:
-                        print(f"保存新闻条目失败 [{item.title[:30]}...]: {e}")
-
+            # 3. 记录抓取概况
+            new_count = stats["new"]
+            updated_count = stats["updated"]
             total_items = new_count + updated_count
-
-            # 记录抓取信息
-            cursor.execute("""
-                INSERT OR REPLACE INTO crawl_records
-                (crawl_time, total_items, created_at)
-                VALUES (?, ?, ?)
-            """, (data.crawl_time, total_items, now_str))
-
-            # 获取刚插入的 crawl_record 的 ID
-            cursor.execute("""
-                SELECT id FROM crawl_records WHERE crawl_time = ?
-            """, (data.crawl_time,))
-            record_row = cursor.fetchone()
-            if record_row:
-                crawl_record_id = record_row[0]
-
-                # 记录成功的来源
-                for source_id in success_sources:
-                    cursor.execute("""
-                        INSERT OR REPLACE INTO crawl_source_status
-                        (crawl_record_id, platform_id, status)
-                        VALUES (?, ?, 'success')
-                    """, (crawl_record_id, source_id))
-
-                # 记录失败的来源
-                for failed_id in data.failed_ids:
-                    # 确保失败的平台也在 platforms 表中
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO platforms (id, name, updated_at)
-                        VALUES (?, ?, ?)
-                    """, (failed_id, failed_id, now_str))
-
-                    cursor.execute("""
-                        INSERT OR REPLACE INTO crawl_source_status
-                        (crawl_record_id, platform_id, status)
-                        VALUES (?, ?, 'failed')
-                    """, (crawl_record_id, failed_id))
+            self._record_crawl_summary(cursor, data, total_items, success_sources, now_str)
 
             conn.commit()
 
-            # 输出详细的存储统计日志
+            # 输出日志
             log_parts = [f"[本地存储] 处理完成：新增 {new_count} 条"]
             if updated_count > 0:
                 log_parts.append(f"更新 {updated_count} 条")
-            if title_changed_count > 0:
-                log_parts.append(f"标题变更 {title_changed_count} 条")
-            print("，".join(log_parts))
+            if stats["title_changed"] > 0:
+                log_parts.append(f"标题变更 {stats['title_changed']} 条")
+            self.logger.info("，".join(log_parts))
 
             return True
 
         except Exception as e:
-            print(f"[本地存储] 保存失败: {e}")
+            self.logger.error(f"[本地存储] 保存失败: {e}")
             return False
+
+    def _sync_platforms(self, cursor: sqlite3.Cursor, id_to_name: Dict[str, str], now_str: str) -> None:
+        """同步平台信息到 platforms 表"""
+        for source_id, source_name in id_to_name.items():
+            cursor.execute("""
+                INSERT INTO platforms (id, name, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    updated_at = excluded.updated_at
+            """, (source_id, source_name, now_str))
+
+    def _process_single_news_item(
+        self, 
+        cursor: sqlite3.Cursor, 
+        item: NewsItem, 
+        source_id: str, 
+        crawl_time: str, 
+        now_str: str,
+        stats: Dict[str, int]
+    ) -> None:
+        """处理单个新闻条目的保存/更新"""
+        try:
+            normalized_url = normalize_url(item.url, source_id) if item.url else ""
+
+            if normalized_url:
+                cursor.execute("SELECT id, title FROM news_items WHERE url = ? AND platform_id = ?", (normalized_url, source_id))
+                existing = cursor.fetchone()
+
+                if existing:
+                    item_id, old_title = existing
+                    if old_title != item.title:
+                        cursor.execute("INSERT INTO title_changes (news_item_id, old_title, new_title, changed_at) VALUES (?, ?, ?, ?)",
+                                     (item_id, old_title, item.title, now_str))
+                        stats["title_changed"] += 1
+
+                    cursor.execute("INSERT INTO rank_history (news_item_id, rank, crawl_time, created_at) VALUES (?, ?, ?, ?)",
+                                 (item_id, item.rank, crawl_time, now_str))
+
+                    cursor.execute("""
+                        UPDATE news_items SET title = ?, rank = ?, mobile_url = ?, 
+                        image_url = CASE WHEN ? != '' THEN ? ELSE image_url END,
+                        last_crawl_time = ?, crawl_count = crawl_count + 1, updated_at = ?
+                        WHERE id = ?
+                    """, (item.title, item.rank, item.mobile_url, item.image_url, item.image_url, crawl_time, now_str, item_id))
+                    stats["updated"] += 1
+                else:
+                    cursor.execute("""
+                        INSERT INTO news_items (title, platform_id, rank, url, mobile_url, image_url,
+                        first_crawl_time, last_crawl_time, crawl_count, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                    """, (item.title, source_id, item.rank, normalized_url, item.mobile_url, item.image_url, crawl_time, crawl_time, now_str, now_str))
+                    new_id = cursor.lastrowid
+                    cursor.execute("INSERT INTO rank_history (news_item_id, rank, crawl_time, created_at) VALUES (?, ?, ?, ?)",
+                                 (new_id, item.rank, crawl_time, now_str))
+                    stats["new"] += 1
+            else:
+                cursor.execute("""
+                    INSERT INTO news_items (title, platform_id, rank, url, mobile_url, image_url,
+                    first_crawl_time, last_crawl_time, crawl_count, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                """, (item.title, source_id, item.rank, "", item.mobile_url, item.image_url, crawl_time, crawl_time, now_str, now_str))
+                new_id = cursor.lastrowid
+                cursor.execute("INSERT INTO rank_history (news_item_id, rank, crawl_time, created_at) VALUES (?, ?, ?, ?)",
+                             (new_id, item.rank, crawl_time, now_str))
+                stats["new"] += 1
+        except sqlite3.Error as e:
+            self.logger.error(f"处理新闻条目失败 [{item.title[:30]}...]: {e}")
+
+    def _record_crawl_summary(
+        self, 
+        cursor: sqlite3.Cursor, 
+        data: NewsData, 
+        total_items: int, 
+        success_sources: List[str], 
+        now_str: str
+    ) -> None:
+        """记录抓取汇总信息"""
+        cursor.execute("INSERT OR REPLACE INTO crawl_records (crawl_time, total_items, created_at) VALUES (?, ?, ?)",
+                     (data.crawl_time, total_items, now_str))
+        
+        cursor.execute("SELECT id FROM crawl_records WHERE crawl_time = ?", (data.crawl_time,))
+        record_row = cursor.fetchone()
+        if record_row:
+            record_id = record_row[0]
+            for s_id in success_sources:
+                cursor.execute("INSERT OR REPLACE INTO crawl_source_status (crawl_record_id, platform_id, status) VALUES (?, ?, 'success')",
+                             (record_id, s_id))
+            for f_id in data.failed_ids:
+                cursor.execute("INSERT OR IGNORE INTO platforms (id, name, updated_at) VALUES (?, ?, ?)", (f_id, f_id, now_str))
+                cursor.execute("INSERT OR REPLACE INTO crawl_source_status (crawl_record_id, platform_id, status) VALUES (?, ?, 'failed')",
+                             (record_id, f_id))
 
     def get_today_all_data(self, date: Optional[str] = None) -> Optional[NewsData]:
         """
@@ -381,6 +373,7 @@ class LocalStorageBackend(StorageBackend):
         try:
             db_path = self._get_db_path(date)
             if not db_path.exists():
+                self.logger.info(f"[本地存储] 数据库文件不存在: {db_path}")
                 return None
 
             conn = self._get_connection(date)
@@ -398,6 +391,7 @@ class LocalStorageBackend(StorageBackend):
 
             rows = cursor.fetchall()
             if not rows:
+                self.logger.info(f"[本地存储] 日期 {date or '今天'} 没有新闻数据。")
                 return None
 
             # 收集所有 news_item_id
@@ -483,18 +477,23 @@ class LocalStorageBackend(StorageBackend):
             )
 
         except Exception as e:
-            print(f"[本地存储] 读取数据失败: {e}")
+            self.logger.error(f"[本地存储] 读取数据失败: {e}")
             return None
 
     def _get_history_connection(self) -> sqlite3.Connection:
         """获取历史记录数据库连接（用于去重）"""
         if self._history_conn is None:
             history_db_path = self.data_dir / "history.db"
-            conn = sqlite3.connect(history_db_path)
-            conn.row_factory = sqlite3.Row
-            # 初始化表结构
-            self._init_tables(conn, "news")  # 使用 news schema，包含 pushed_news
-            self._history_conn = conn
+            try:
+                conn = sqlite3.connect(history_db_path)
+                conn.row_factory = sqlite3.Row
+                # 初始化表结构
+                # self._init_tables(conn, "news")  # 使用 news schema，包含 pushed_news
+                self._history_conn = conn
+                self.logger.info(f"[SQLite] 成功连接到历史数据库: {history_db_path}")
+            except sqlite3.Error as e:
+                self.logger.error(f"[SQLite] 连接到历史数据库失败 {history_db_path}: {e}")
+                raise
         return self._history_conn
 
     def is_news_pushed(self, content_hash: str) -> bool:
@@ -510,7 +509,7 @@ class LocalStorageBackend(StorageBackend):
             )
             return bool(cursor.fetchone())
         except Exception as e:
-            print(f"[本地存储] 检查推送记录失败: {e}")
+            self.logger.error(f"[本地存储] 检查推送记录失败: {e}")
             return False
 
     def is_news_pushed_batch(self, hash_list: List[str]) -> Dict[str, bool]:
@@ -527,6 +526,9 @@ class LocalStorageBackend(StorageBackend):
             BATCH_SIZE = 1000
             result = {}
 
+            conn = self._get_history_connection()
+            cursor = conn.cursor()
+
             # 如果 hash 数量超过限制，分批查询
             for i in range(0, len(hash_list), BATCH_SIZE):
                 batch = hash_list[i:i + BATCH_SIZE]
@@ -535,8 +537,6 @@ class LocalStorageBackend(StorageBackend):
                 placeholders = ','.join(['?' for _ in batch])
                 query = f"SELECT content_hash FROM pushed_news WHERE content_hash IN ({placeholders})"
 
-                conn = self._get_history_connection()
-                cursor = conn.cursor()
                 cursor.execute(query, batch)
 
                 # 获取已推送的哈希列表
@@ -548,7 +548,7 @@ class LocalStorageBackend(StorageBackend):
 
             return result
         except Exception as e:
-            print(f"[本地存储] 批量检查推送记录失败: {e}")
+            self.logger.error(f"[本地存储] 批量检查推送记录失败: {e}")
             # 失败时返回所有哈希都未推送（保守策略）
             return {h: False for h in hash_list}
 
@@ -566,7 +566,7 @@ class LocalStorageBackend(StorageBackend):
             conn.commit()
             return True
         except Exception as e:
-            print(f"[本地存储] 记录推送历史失败: {e}")
+            self.logger.error(f"[本地存储] 记录推送历史失败: {e}")
             return False
 
     def get_latest_crawl_data(self, date: Optional[str] = None) -> Optional[NewsData]:
@@ -582,6 +582,7 @@ class LocalStorageBackend(StorageBackend):
         try:
             db_path = self._get_db_path(date)
             if not db_path.exists():
+                self.logger.info(f"[本地存储] 数据库文件不存在: {db_path}")
                 return None
 
             conn = self._get_connection(date)
@@ -596,6 +597,7 @@ class LocalStorageBackend(StorageBackend):
 
             time_row = cursor.fetchone()
             if not time_row:
+                self.logger.info(f"[本地存储] 日期 {date or '今天'} 没有抓取记录。")
                 return None
 
             latest_time = time_row[0]
@@ -612,6 +614,7 @@ class LocalStorageBackend(StorageBackend):
 
             rows = cursor.fetchall()
             if not rows:
+                self.logger.info(f"[本地存储] 最新抓取时间 {latest_time} 没有新闻数据。")
                 return None
 
             # 收集所有 news_item_id
@@ -683,7 +686,7 @@ class LocalStorageBackend(StorageBackend):
             )
 
         except Exception as e:
-            print(f"[本地存储] 获取最新数据失败: {e}")
+            self.logger.error(f"[本地存储] 获取最新数据失败: {e}")
             return None
 
     def detect_new_titles(self, current_data: NewsData) -> Dict[str, Dict]:
@@ -742,7 +745,7 @@ class LocalStorageBackend(StorageBackend):
             return new_titles
 
         except Exception as e:
-            print(f"[本地存储] 检测新标题失败: {e}")
+            self.logger.error(f"[本地存储] 检测新标题失败: {e}")
             return {}
 
     def save_txt_snapshot(self, data: NewsData) -> Optional[str]:
@@ -796,11 +799,11 @@ class LocalStorageBackend(StorageBackend):
                     for failed_id in data.failed_ids:
                         f.write(f"{failed_id}\n")
 
-            print(f"[本地存储] TXT 快照已保存: {file_path}")
+            self.logger.info(f"[本地存储] TXT 快照已保存: {file_path}")
             return str(file_path)
 
         except Exception as e:
-            print(f"[本地存储] 保存 TXT 快照失败: {e}")
+            self.logger.error(f"[本地存储] 保存 TXT 快照失败: {e}")
             return None
 
     def save_html_report(self, html_content: str, filename: str, is_summary: bool = False) -> Optional[str]:
@@ -830,11 +833,11 @@ class LocalStorageBackend(StorageBackend):
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
 
-            print(f"[本地存储] HTML 报告已保存: {file_path}")
+            self.logger.info(f"[本地存储] HTML 报告已保存: {file_path}")
             return str(file_path)
 
         except Exception as e:
-            print(f"[本地存储] 保存 HTML 报告失败: {e}")
+            self.logger.error(f"[本地存储] 保存 HTML 报告失败: {e}")
             return None
 
     def is_first_crawl_today(self, date: Optional[str] = None) -> bool:
@@ -866,7 +869,7 @@ class LocalStorageBackend(StorageBackend):
             return count <= 1
 
         except Exception as e:
-            print(f"[本地存储] 检查首次抓取失败: {e}")
+            self.logger.error(f"[本地存储] 检查首次抓取失败: {e}")
             return True
 
     def get_crawl_times(self, date: Optional[str] = None) -> List[str]:
@@ -896,7 +899,7 @@ class LocalStorageBackend(StorageBackend):
             return [row[0] for row in rows]
 
         except Exception as e:
-            print(f"[本地存储] 获取抓取时间列表失败: {e}")
+            self.logger.error(f"[本地存储] 获取抓取时间列表失败: {e}")
             return []
 
     def cleanup(self) -> None:
@@ -904,18 +907,18 @@ class LocalStorageBackend(StorageBackend):
         for db_path, conn in self._db_connections.items():
             try:
                 conn.close()
-                print(f"[本地存储] 关闭数据库连接: {db_path}")
+                self.logger.info(f"[本地存储] 关闭数据库连接: {db_path}")
             except Exception as e:
-                print(f"[本地存储] 关闭连接失败 {db_path}: {e}")
+                self.logger.error(f"[本地存储] 关闭连接失败 {db_path}: {e}")
 
         self._db_connections.clear()
 
         if self._history_conn:
             try:
                 self._history_conn.close()
-                print("[本地存储] 关闭历史数据库连接")
+                self.logger.info("[本地存储] 关闭历史数据库连接")
             except Exception as e:
-                print(f"[本地存储] 关闭历史连接失败: {e}")
+                self.logger.error(f"[本地存储] 关闭历史连接失败: {e}")
             self._history_conn = None
 
     def cleanup_old_data(self, retention_days: int) -> int:
@@ -993,9 +996,9 @@ class LocalStorageBackend(StorageBackend):
                         try:
                             db_file.unlink()
                             deleted_count += 1
-                            print(f"[本地存储] 清理过期数据: {db_type}/{db_file.name}")
+                            self.logger.info(f"[本地存储] 清理过期数据: {db_type}/{db_file.name}")
                         except Exception as e:
-                            print(f"[本地存储] 删除文件失败 {db_file}: {e}")
+                            self.logger.error(f"[本地存储] 删除文件失败 {db_file}: {e}")
 
             # 清理快照目录 (txt/, html/)
             for snapshot_type in ["txt", "html"]:
@@ -1012,17 +1015,17 @@ class LocalStorageBackend(StorageBackend):
                         try:
                             shutil.rmtree(date_folder)
                             deleted_count += 1
-                            print(f"[本地存储] 清理过期数据: {snapshot_type}/{date_folder.name}")
+                            self.logger.info(f"[本地存储] 清理过期数据: {snapshot_type}/{date_folder.name}")
                         except Exception as e:
-                            print(f"[本地存储] 删除目录失败 {date_folder}: {e}")
+                            self.logger.error(f"[本地存储] 删除目录失败 {date_folder}: {e}")
 
             if deleted_count > 0:
-                print(f"[本地存储] 共清理 {deleted_count} 个过期文件/目录")
+                self.logger.info(f"[本地存储] 共清理 {deleted_count} 个过期文件/目录")
 
             return deleted_count
 
         except Exception as e:
-            print(f"[本地存储] 清理过期数据失败: {e}")
+            self.logger.error(f"[本地存储] 清理过期数据失败: {e}")
             return deleted_count
 
     def has_pushed_today(self, date: Optional[str] = None) -> bool:
@@ -1051,7 +1054,7 @@ class LocalStorageBackend(StorageBackend):
             return False
 
         except Exception as e:
-            print(f"[本地存储] 检查推送记录失败: {e}")
+            self.logger.error(f"[本地存储] 检查推送记录失败: {e}")
             return False
 
     def record_push(self, report_type: str, date: Optional[str] = None) -> bool:
@@ -1075,19 +1078,18 @@ class LocalStorageBackend(StorageBackend):
             cursor.execute("""
                 INSERT INTO push_records (date, pushed, push_time, report_type, created_at)
                 VALUES (?, 1, ?, ?, ?)
-                ON CONFLICT(date) DO UPDATE SET
+                ON CONFLICT(date, report_type) DO UPDATE SET
                     pushed = 1,
-                    push_time = excluded.push_time,
-                    report_type = excluded.report_type
+                    push_time = excluded.push_time
             """, (target_date, now_str, report_type, now_str))
 
             conn.commit()
 
-            print(f"[本地存储] 推送记录已保存: {report_type} at {now_str}")
+            self.logger.info(f"[本地存储] 推送记录已保存: {report_type} at {now_str}")
             return True
 
         except Exception as e:
-            print(f"[本地存储] 记录推送失败: {e}")
+            self.logger.error(f"[本地存储] 记录推送失败: {e}")
             return False
 
     # ========================================
@@ -1172,14 +1174,14 @@ class LocalStorageBackend(StorageBackend):
                                 (title, feed_id, url, published_at, summary, author, image_url,
                                  first_crawl_time, last_crawl_time, crawl_count,
                                  created_at, updated_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                            """, (item.title, feed_id, "", item.published_at,
+                                VALUES (?, ?, "", ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                            """, (item.title, feed_id, item.published_at,
                                   item.summary, item.author, item.image_url, data.crawl_time,
                                   data.crawl_time, now_str, now_str))
                             new_count += 1
 
                     except sqlite3.Error as e:
-                        print(f"[本地存储] 保存 RSS 条目失败 [{item.title[:30]}...]: {e}")
+                        self.logger.error(f"[本地存储] 保存 RSS 条目失败 [{item.title[:30]}...]: {e}")
 
             total_items = new_count + updated_count
 
@@ -1225,12 +1227,12 @@ class LocalStorageBackend(StorageBackend):
             log_parts = [f"[本地存储] RSS 处理完成：新增 {new_count} 条"]
             if updated_count > 0:
                 log_parts.append(f"更新 {updated_count} 条")
-            print("，".join(log_parts))
+            self.logger.info("，".join(log_parts))
 
             return True
 
         except Exception as e:
-            print(f"[本地存储] 保存 RSS 数据失败: {e}")
+            self.logger.error(f"[本地存储] 保存 RSS 数据失败: {e}")
             return False
 
     def get_rss_data(self, date: Optional[str] = None) -> Optional[RSSData]:
@@ -1315,7 +1317,7 @@ class LocalStorageBackend(StorageBackend):
             )
 
         except Exception as e:
-            print(f"[本地存储] 读取 RSS 数据失败: {e}")
+            self.logger.error(f"[本地存储] 读取 RSS 数据失败: {e}")
             return None
 
     def detect_new_rss_items(self, current_data: RSSData) -> Dict[str, List[RSSItem]]:
@@ -1372,7 +1374,7 @@ class LocalStorageBackend(StorageBackend):
             return new_items
 
         except Exception as e:
-            print(f"[本地存储] 检测新 RSS 条目失败: {e}")
+            self.logger.error(f"[本地存储] 检测新 RSS 条目失败: {e}")
             return {}
 
     def get_latest_rss_data(self, date: Optional[str] = None) -> Optional[RSSData]:
@@ -1467,7 +1469,7 @@ class LocalStorageBackend(StorageBackend):
             )
 
         except Exception as e:
-            print(f"[本地存储] 获取最新 RSS 数据失败: {e}")
+            self.logger.error(f"[本地存储] 读取最新 RSS 数据失败: {e}")
             return None
 
     def __del__(self):

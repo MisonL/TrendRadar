@@ -818,7 +818,7 @@ class AppContext:
                 pass
 
         if len(rss_items) != len(filtered_items):
-            print(f"[去重] RSS 过滤前: {len(rss_items)} 条, 过滤后: {len(filtered_items)} 条")
+            logger.info(f"[去重] RSS 过滤前: {len(rss_items)} 条, 过滤后: {len(filtered_items)} 条")
 
         return filtered_items, items_to_record
 

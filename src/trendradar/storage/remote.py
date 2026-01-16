@@ -7,6 +7,7 @@
 数据流程：下载当天 SQLite → 合并新数据 → 上传回远程
 """
 
+import logging
 import pytz
 import re
 import shutil
@@ -118,7 +119,7 @@ class RemoteStorageBackend(StorageBackend):
         self._downloaded_files: List[Path] = []
         self._db_connections: Dict[str, sqlite3.Connection] = {}
 
-        print(f"[远程存储] 初始化完成，存储桶: {bucket_name}，签名版本: {signature_version}")
+        logging.getLogger('TrendRadar').info(f"[远程存储] 初始化完成，存储桶: {bucket_name}，签名版本: {signature_version}")
 
     @property
     def backend_name(self) -> str:
@@ -189,10 +190,10 @@ class RemoteStorageBackend(StorageBackend):
             if error_code in ("404", "NoSuchKey", "Not Found"):
                 return False
             # 其他错误（如权限问题）也视为不存在，但打印警告
-            print(f"[远程存储] 检查对象存在性失败 ({r2_key}): {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 检查对象存在性失败 ({r2_key}): {e}")
             return False
         except Exception as e:
-            print(f"[远程存储] 检查对象存在性异常 ({r2_key}): {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 检查对象存在性异常 ({r2_key}): {e}")
             return False
 
     def _download_sqlite(self, date: Optional[str] = None, db_type: str = "news") -> Optional[Path]:
@@ -217,7 +218,7 @@ class RemoteStorageBackend(StorageBackend):
 
         # 先检查文件是否存在
         if not self._check_object_exists(r2_key):
-            print(f"[远程存储] 文件不存在，将创建新数据库: {r2_key}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 文件不存在，将创建新数据库: {r2_key}")
             return None
 
         try:
@@ -228,19 +229,19 @@ class RemoteStorageBackend(StorageBackend):
                 for chunk in response['Body'].iter_chunks(chunk_size=1024*1024):
                     f.write(chunk)
             self._downloaded_files.append(local_path)
-            print(f"[远程存储] 已下载: {r2_key} -> {local_path}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 已下载: {r2_key} -> {local_path}")
             return local_path
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             # S3 兼容存储可能返回不同的错误码
             if error_code in ("404", "NoSuchKey", "Not Found"):
-                print(f"[远程存储] 文件不存在，将创建新数据库: {r2_key}")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 文件不存在，将创建新数据库: {r2_key}")
                 return None
             else:
-                print(f"[远程存储] 下载失败 (错误码: {error_code}): {e}")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 下载失败 (错误码: {error_code}): {e}")
                 raise
         except Exception as e:
-            print(f"[远程存储] 下载异常: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 下载异常: {e}")
             raise
 
     def _upload_sqlite(self, date: Optional[str] = None, db_type: str = "news") -> bool:
@@ -258,13 +259,13 @@ class RemoteStorageBackend(StorageBackend):
         r2_key = self._get_remote_db_key(date, db_type)
 
         if not local_path.exists():
-            print(f"[远程存储] 本地文件不存在，无法上传: {local_path}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 本地文件不存在，无法上传: {local_path}")
             return False
 
         try:
             # 获取本地文件大小
             local_size = local_path.stat().st_size
-            print(f"[远程存储] 准备上传: {local_path} ({local_size} bytes) -> {r2_key}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 准备上传: {local_path} ({local_size} bytes) -> {r2_key}")
 
             # 读取文件内容为 bytes 后上传
             # 避免传入文件对象时 requests 库使用 chunked transfer encoding
@@ -280,18 +281,18 @@ class RemoteStorageBackend(StorageBackend):
                 ContentLength=local_size,
                 ContentType='application/x-sqlite3',
             )
-            print(f"[远程存储] 已上传: {local_path} -> {r2_key}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 已上传: {local_path} -> {r2_key}")
 
             # 验证上传成功
             if self._check_object_exists(r2_key):
-                print(f"[远程存储] 上传验证成功: {r2_key}")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 上传验证成功: {r2_key}")
                 return True
             else:
-                print("[远程存储] 上传验证失败: 文件未在远程存储中找到")
+                logging.getLogger('TrendRadar').info("[远程存储] 上传验证失败: 文件未在远程存储中找到")
                 return False
 
         except Exception as e:
-            print(f"[远程存储] 上传失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 上传失败: {e}")
             return False
 
     def _get_connection(self, date: Optional[str] = None, db_type: str = "news") -> sqlite3.Connection:
@@ -377,7 +378,7 @@ class RemoteStorageBackend(StorageBackend):
             row = cursor.fetchone()
             existing_count = row[0] if row else 0
             if existing_count > 0:
-                print(f"[远程存储] 已有 {existing_count} 条历史记录，将合并新数据")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 已有 {existing_count} 条历史记录，将合并新数据")
 
             # 获取配置时区的当前时间
             now_str = self._get_configured_time().strftime("%Y-%m-%d %H:%M:%S")
@@ -488,7 +489,7 @@ class RemoteStorageBackend(StorageBackend):
                             new_count += 1
 
                     except sqlite3.Error as e:
-                        print(f"[远程存储] 保存新闻条目失败 [{item.title[:30]}...]: {e}")
+                        logging.getLogger('TrendRadar').info(f"[远程存储] 保存新闻条目失败 [{item.title[:30]}...]: {e}")
 
             total_items = new_count + updated_count
 
@@ -543,18 +544,18 @@ class RemoteStorageBackend(StorageBackend):
             if title_changed_count > 0:
                 log_parts.append(f"标题变更 {title_changed_count} 条")
             log_parts.append(f"(去重后总计: {final_count} 条)")
-            print("，".join(log_parts))
+            logging.getLogger('TrendRadar').info("，".join(log_parts))
 
             # 上传到远程存储
             if self._upload_sqlite(data.date):
-                print("[远程存储] 数据已同步到远程存储")
+                logging.getLogger('TrendRadar').info("[远程存储] 数据已同步到远程存储")
                 return True
             else:
-                print("[远程存储] 上传远程存储失败")
+                logging.getLogger('TrendRadar').info("[远程存储] 上传远程存储失败")
                 return False
 
         except Exception as e:
-            print(f"[远程存储] 保存失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 保存失败: {e}")
             return False
 
     def get_today_all_data(self, date: Optional[str] = None) -> Optional[NewsData]:
@@ -659,7 +660,7 @@ class RemoteStorageBackend(StorageBackend):
             )
 
         except Exception as e:
-            print(f"[远程存储] 读取数据失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 读取数据失败: {e}")
             return None
 
     def get_latest_crawl_data(self, date: Optional[str] = None) -> Optional[NewsData]:
@@ -740,7 +741,7 @@ class RemoteStorageBackend(StorageBackend):
             )
 
         except Exception as e:
-            print(f"[远程存储] 获取最新数据失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 获取最新数据失败: {e}")
             return None
 
     def detect_new_titles(self, current_data: NewsData) -> Dict[str, Dict]:
@@ -790,7 +791,7 @@ class RemoteStorageBackend(StorageBackend):
             return new_titles
 
         except Exception as e:
-            print(f"[远程存储] 检测新标题失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 检测新标题失败: {e}")
             return {}
 
     def save_txt_snapshot(self, data: NewsData) -> Optional[str]:
@@ -832,11 +833,11 @@ class RemoteStorageBackend(StorageBackend):
                     for failed_id in data.failed_ids:
                         f.write(f"{failed_id}\n")
 
-            print(f"[远程存储] TXT 快照已保存: {file_path}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] TXT 快照已保存: {file_path}")
             return str(file_path)
 
         except Exception as e:
-            print(f"[远程存储] 保存 TXT 快照失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 保存 TXT 快照失败: {e}")
             return None
 
     def save_html_report(self, html_content: str, filename: str, is_summary: bool = False) -> Optional[str]:
@@ -854,11 +855,11 @@ class RemoteStorageBackend(StorageBackend):
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
 
-            print(f"[远程存储] HTML 报告已保存: {file_path}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] HTML 报告已保存: {file_path}")
             return str(file_path)
 
         except Exception as e:
-            print(f"[远程存储] 保存 HTML 报告失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 保存 HTML 报告失败: {e}")
             return None
 
     def is_first_crawl_today(self, date: Optional[str] = None) -> bool:
@@ -877,7 +878,7 @@ class RemoteStorageBackend(StorageBackend):
             return count <= 1
 
         except Exception as e:
-            print(f"[远程存储] 检查首次抓取失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 检查首次抓取失败: {e}")
             return True
 
     def cleanup(self) -> None:
@@ -891,9 +892,9 @@ class RemoteStorageBackend(StorageBackend):
         for db_path, conn in list(db_connections.items()):
             try:
                 conn.close()
-                print(f"[远程存储] 关闭数据库连接: {db_path}")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 关闭数据库连接: {db_path}")
             except Exception as e:
-                print(f"[远程存储] 关闭连接失败 {db_path}: {e}")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 关闭连接失败 {db_path}: {e}")
 
         if db_connections:
             db_connections.clear()
@@ -904,11 +905,11 @@ class RemoteStorageBackend(StorageBackend):
             try:
                 if temp_dir.exists():
                     shutil.rmtree(temp_dir)
-                    print(f"[远程存储] 临时目录已清理: {temp_dir}")
+                    logging.getLogger('TrendRadar').info(f"[远程存储] 临时目录已清理: {temp_dir}")
             except Exception as e:
                 # 忽略 Python 关闭时的错误
                 if sys.meta_path is not None:
-                    print(f"[远程存储] 清理临时目录失败: {e}")
+                    logging.getLogger('TrendRadar').info(f"[远程存储] 清理临时目录失败: {e}")
 
         downloaded_files = getattr(self, "_downloaded_files", None)
         if downloaded_files:
@@ -987,20 +988,20 @@ class RemoteStorageBackend(StorageBackend):
                             Bucket=self.bucket_name,
                             Delete={'Objects': batch}
                         )
-                        print(f"[远程存储] 删除 {len(batch)} 个对象")
+                        logging.getLogger('TrendRadar').info(f"[远程存储] 删除 {len(batch)} 个对象")
                     except Exception as e:
-                        print(f"[远程存储] 批量删除失败: {e}")
+                        logging.getLogger('TrendRadar').info(f"[远程存储] 批量删除失败: {e}")
 
                 deleted_count = len(deleted_dates)
                 for date_str in sorted(deleted_dates):
-                    print(f"[远程存储] 清理过期数据: news/{date_str}.db")
+                    logging.getLogger('TrendRadar').info(f"[远程存储] 清理过期数据: news/{date_str}.db")
 
-                print(f"[远程存储] 共清理 {deleted_count} 个过期日期数据库文件")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 共清理 {deleted_count} 个过期日期数据库文件")
 
             return deleted_count
 
         except Exception as e:
-            print(f"[远程存储] 清理过期数据失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 清理过期数据失败: {e}")
             return deleted_count
 
     def has_pushed_today(self, date: Optional[str] = None) -> bool:
@@ -1029,7 +1030,7 @@ class RemoteStorageBackend(StorageBackend):
             return False
 
         except Exception as e:
-            print(f"[远程存储] 检查推送记录失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 检查推送记录失败: {e}")
             return False
 
     def record_push(self, report_type: str, date: Optional[str] = None) -> bool:
@@ -1061,18 +1062,18 @@ class RemoteStorageBackend(StorageBackend):
 
             conn.commit()
 
-            print(f"[远程存储] 推送记录已保存: {report_type} at {now_str}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 推送记录已保存: {report_type} at {now_str}")
 
             # 上传到远程存储 确保记录持久化
             if self._upload_sqlite(date):
-                print("[远程存储] 推送记录已同步到远程存储")
+                logging.getLogger('TrendRadar').info("[远程存储] 推送记录已同步到远程存储")
                 return True
             else:
-                print("[远程存储] 推送记录同步到远程存储失败")
+                logging.getLogger('TrendRadar').info("[远程存储] 推送记录同步到远程存储失败")
                 return False
 
         except Exception as e:
-            print(f"[远程存储] 记录推送失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 记录推送失败: {e}")
             return False
 
     def is_news_pushed(self, content_hash: str) -> bool:
@@ -1096,7 +1097,7 @@ class RemoteStorageBackend(StorageBackend):
             )
             return bool(cursor.fetchone())
         except Exception as e:
-            print(f"[远程存储] 检查推送记录失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 检查推送记录失败: {e}")
             return False
 
     def is_news_pushed_batch(self, hash_list: List[str]) -> Dict[str, bool]:
@@ -1138,7 +1139,7 @@ class RemoteStorageBackend(StorageBackend):
 
             return result
         except Exception as e:
-            print(f"[远程存储] 批量检查推送记录失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 批量检查推送记录失败: {e}")
             # 失败时返回所有哈希都未推送（保守策略）
             return {h: False for h in hash_list}
 
@@ -1166,7 +1167,7 @@ class RemoteStorageBackend(StorageBackend):
             conn.commit()
             return True
         except Exception as e:
-            print(f"[远程存储] 记录推送历史失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 记录推送历史失败: {e}")
             return False
 
     # ========================================
@@ -1258,7 +1259,7 @@ class RemoteStorageBackend(StorageBackend):
                             new_count += 1
 
                     except sqlite3.Error as e:
-                        print(f"[远程存储] 保存 RSS 条目失败 [{item.title[:30]}...]: {e}")
+                        logging.getLogger('TrendRadar').info(f"[远程存储] 保存 RSS 条目失败 [{item.title[:30]}...]: {e}")
 
             total_items = new_count + updated_count
 
@@ -1304,18 +1305,18 @@ class RemoteStorageBackend(StorageBackend):
             log_parts = [f"[远程存储] RSS 处理完成：新增 {new_count} 条"]
             if updated_count > 0:
                 log_parts.append(f"更新 {updated_count} 条")
-            print("，".join(log_parts))
+            logging.getLogger('TrendRadar').info("，".join(log_parts))
 
             # 上传到远程存储
             if self._upload_sqlite(data.date, db_type="rss"):
-                print("[远程存储] RSS 数据已同步到远程存储")
+                logging.getLogger('TrendRadar').info("[远程存储] RSS 数据已同步到远程存储")
                 return True
             else:
-                print("[远程存储] RSS 上传远程存储失败")
+                logging.getLogger('TrendRadar').info("[远程存储] RSS 上传远程存储失败")
                 return False
 
         except Exception as e:
-            print(f"[远程存储] 保存 RSS 数据失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 保存 RSS 数据失败: {e}")
             return False
 
     def get_rss_data(self, date: Optional[str] = None) -> Optional[RSSData]:
@@ -1400,7 +1401,7 @@ class RemoteStorageBackend(StorageBackend):
             )
 
         except Exception as e:
-            print(f"[远程存储] 读取 RSS 数据失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 读取 RSS 数据失败: {e}")
             return None
 
     def detect_new_rss_items(self, current_data: RSSData) -> Dict[str, List[RSSItem]]:
@@ -1457,7 +1458,7 @@ class RemoteStorageBackend(StorageBackend):
             return new_items
 
         except Exception as e:
-            print(f"[远程存储] 检测新 RSS 条目失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 检测新 RSS 条目失败: {e}")
             return {}
 
     def get_latest_rss_data(self, date: Optional[str] = None) -> Optional[RSSData]:
@@ -1548,7 +1549,7 @@ class RemoteStorageBackend(StorageBackend):
             )
 
         except Exception as e:
-            print(f"[远程存储] 获取最新 RSS 数据失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 获取最新 RSS 数据失败: {e}")
             return None
 
     def __del__(self):
@@ -1582,7 +1583,7 @@ class RemoteStorageBackend(StorageBackend):
         pulled_count = 0
         now = self._get_configured_time()
 
-        print(f"[远程存储] 开始拉取最近 {days} 天的数据...")
+        logging.getLogger('TrendRadar').info(f"[远程存储] 开始拉取最近 {days} 天的数据...")
 
         for i in range(days):
             date = now - timedelta(days=i)
@@ -1594,7 +1595,7 @@ class RemoteStorageBackend(StorageBackend):
 
             # 如果本地已存在，跳过
             if local_db_path.exists():
-                print(f"[远程存储] 跳过（本地已存在）: {date_str}")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 跳过（本地已存在）: {date_str}")
                 continue
 
             # 远程对象键
@@ -1602,7 +1603,7 @@ class RemoteStorageBackend(StorageBackend):
 
             # 检查远程是否存在
             if not self._check_object_exists(remote_key):
-                print(f"[远程存储] 跳过（远程不存在）: {date_str}")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 跳过（远程不存在）: {date_str}")
                 continue
 
             # 下载（使用 get_object + iter_chunks 处理 chunked encoding）
@@ -1612,12 +1613,12 @@ class RemoteStorageBackend(StorageBackend):
                 with open(local_db_path, 'wb') as f:
                     for chunk in response['Body'].iter_chunks(chunk_size=1024*1024):
                         f.write(chunk)
-                print(f"[远程存储] 已拉取: {remote_key} -> {local_db_path}")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 已拉取: {remote_key} -> {local_db_path}")
                 pulled_count += 1
             except Exception as e:
-                print(f"[远程存储] 拉取失败 ({date_str}): {e}")
+                logging.getLogger('TrendRadar').info(f"[远程存储] 拉取失败 ({date_str}): {e}")
 
-        print(f"[远程存储] 拉取完成，共下载 {pulled_count} 个数据库文件")
+        logging.getLogger('TrendRadar').info(f"[远程存储] 拉取完成，共下载 {pulled_count} 个数据库文件")
         return pulled_count
 
     def list_remote_dates(self) -> List[str]:
@@ -1647,5 +1648,5 @@ class RemoteStorageBackend(StorageBackend):
             return sorted(dates, reverse=True)
 
         except Exception as e:
-            print(f"[远程存储] 列出远程日期失败: {e}")
+            logging.getLogger('TrendRadar').info(f"[远程存储] 列出远程日期失败: {e}")
             return []

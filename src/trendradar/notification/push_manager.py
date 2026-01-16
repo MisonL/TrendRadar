@@ -10,6 +10,9 @@ from datetime import datetime
 from typing import Callable, Optional, Any
 
 import pytz
+import logging
+
+logger = logging.getLogger("TrendRadar.PushRecord")
 
 
 class PushRecordManager:
@@ -38,7 +41,7 @@ class PushRecordManager:
         self.storage_backend = storage_backend
         self.get_time = get_time_func or self._default_get_time
 
-        print(f"[推送记录] 使用 {storage_backend.backend_name} 存储后端")
+        logger.info(f"[推送记录] 使用 {storage_backend.backend_name} 存储后端")
 
     def _default_get_time(self) -> datetime:
         """默认时间获取函数（UTC+8）"""
@@ -94,7 +97,7 @@ class PushRecordManager:
 
                 return f"{hour:02d}:{minute:02d}"
             except Exception as e:
-                print(f"时间格式化错误 '{time_str}': {e}")
+                logger.error(f"时间格式化错误 '{time_str}': {e}")
                 return time_str
 
         normalized_start = normalize_time(start_time)
@@ -104,6 +107,6 @@ class PushRecordManager:
         result = normalized_start <= normalized_current <= normalized_end
 
         if not result:
-            print(f"时间窗口判断：当前 {normalized_current}，窗口 {normalized_start}-{normalized_end}")
+            logger.info(f"时间窗口判断：当前 {normalized_current}，窗口 {normalized_start}-{normalized_end}")
 
         return result

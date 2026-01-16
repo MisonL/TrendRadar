@@ -7,6 +7,7 @@
 - generate_html_report: 生成 HTML 报告
 """
 
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Callable
 
@@ -64,7 +65,7 @@ def prepare_report_data(
             original_new_count = sum(len(titles) for titles in new_titles.values()) if new_titles else 0
             filtered_new_count = sum(len(titles) for titles in filtered_new_titles.values()) if filtered_new_titles else 0
             if original_new_count > 0:
-                print(f"频率词过滤后：{filtered_new_count} 条新增热点匹配（原始 {original_new_count} 条）")
+                logging.getLogger('TrendRadar').info(f"频率词过滤后：{filtered_new_count} 条新增热点匹配（原始 {original_new_count} 条）")
 
         if filtered_new_titles and id_to_name:
             for source_id, titles_data in filtered_new_titles.items():

@@ -6,6 +6,7 @@ Handles downloading, storing, and serving cached images to prevent hotlinking is
 and ensure image availability.
 """
 
+import logging
 import asyncio
 import hashlib
 import os
@@ -145,7 +146,7 @@ class ImageCache:
                 # 检查 Content-Type
                 content_type = response.headers.get("Content-Type", "").lower().split(";")[0].strip()
                 if content_type not in self.ALLOWED_MIME_TYPES:
-                    print(f"[ImageCache] 跳过不支持的图片类型: {content_type} ({url})")
+                    logging.getLogger('TrendRadar').info(f"[ImageCache] 跳过不支持的图片类型: {content_type} ({url})")
                     return None
                 
                 # 确定扩展名
@@ -165,12 +166,12 @@ class ImageCache:
             except httpx.HTTPStatusError as e:
                 # 检查响应状态 (如果 response 未定义，如 client 连接异常，这里会报错，但 tenacity 会重试)
                 if hasattr(e, 'response') and e.response.status_code == 404:
-                    print(f"[ImageCache] 图片不存在 (404): {url}")
+                    logging.getLogger('TrendRadar').info(f"[ImageCache] 图片不存在 (404): {url}")
                     return None # 404 不重试
-                print(f"[ImageCache] 下载失败 ({getattr(e.response, 'status_code', 'unknown')}): {url}")
+                logging.getLogger('TrendRadar').info(f"[ImageCache] 下载失败 ({getattr(e.response, 'status_code', 'unknown')}): {url}")
                 raise # 其他错误让 tenacity 重试
             except Exception as e:
-                print(f"[ImageCache] 下载异常: {e} ({url})")
+                logging.getLogger('TrendRadar').info(f"[ImageCache] 下载异常: {e} ({url})")
                 raise
 
     def cleanup(self) -> int:
@@ -196,7 +197,7 @@ class ImageCache:
                 if dir_date < cutoff_date:
                     shutil.rmtree(item)
                     deleted_count += 1
-                    print(f"[ImageCache] 删除过期图片目录: {item.name}")
+                    logging.getLogger('TrendRadar').info(f"[ImageCache] 删除过期图片目录: {item.name}")
             except ValueError:
                 # 非日期命名的目录，跳过
                 continue

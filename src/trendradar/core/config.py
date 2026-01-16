@@ -6,7 +6,11 @@
 """
 
 import re
+import logging
 from typing import Dict, List, Optional, Tuple
+
+
+logger = logging.getLogger("TrendRadar.Config")
 
 
 def parse_multi_account_config(config_value: str, separator: str = ";") -> List[str]:
@@ -87,9 +91,9 @@ def validate_paired_configs(
     unique_lengths = set(lengths.values())
 
     if len(unique_lengths) > 1:
-        print(f"❌ {channel_name} 配置错误：配对配置数量不一致，将跳过该渠道推送")
+        logger.error(f"❌ {channel_name} 配置错误：配对配置数量不一致，将跳过该渠道推送")
         for key, length in lengths.items():
-            print(f"   - {key}: {length} 个")
+            logger.error(f"   - {key}: {length} 个")
         return False, 0
 
     return True, list(unique_lengths)[0] if unique_lengths else 0
@@ -120,8 +124,8 @@ def limit_accounts(
         ['a1', 'a2']
     """
     if len(accounts) > max_count:
-        print(f"⚠️ {channel_name} 配置了 {len(accounts)} 个账号，超过最大限制 {max_count}，只使用前 {max_count} 个")
-        print("   ⚠️ 警告：如果您是 fork 用户，过多账号可能导致 GitHub Actions 运行时间过长，存在账号风险")
+        logger.info(f"⚠️ {channel_name} 配置了 {len(accounts)} 个账号，超过最大限制 {max_count}，只使用前 {max_count} 个")
+        logger.info("   ⚠️ 警告：如果您是 fork 用户，过多账号可能导致 GitHub Actions 运行时间过长，存在账号风险")
         return accounts[:max_count]
     return accounts
 

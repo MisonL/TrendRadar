@@ -3,6 +3,7 @@
 时间工具模块 - 统一时间处理函数
 """
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -25,7 +26,7 @@ def get_configured_time(timezone: str = DEFAULT_TIMEZONE) -> datetime:
     try:
         tz = pytz.timezone(timezone)
     except pytz.UnknownTimeZoneError:
-        print(f"[警告] 未知时区 '{timezone}'，使用默认时区 {DEFAULT_TIMEZONE}")
+        logging.getLogger('TrendRadar').info(f"[警告] 未知时区 '{timezone}'，使用默认时区 {DEFAULT_TIMEZONE}")
         tz = pytz.timezone(DEFAULT_TIMEZONE)
     return datetime.now(tz)
 

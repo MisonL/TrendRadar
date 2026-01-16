@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 import yaml
+import logging
+
+logger = logging.getLogger("TrendRadar.Loader")
 
 from .config import (
     parse_multi_account_config,
@@ -340,10 +343,10 @@ def _print_notification_sources(config: Dict) -> None:
         notification_sources.append(f"Slack({slack_source}, {count}个账号)")
 
     if notification_sources:
-        print(f"通知渠道配置来源: {', '.join(notification_sources)}")
-        print(f"每个渠道最大账号数: {max_accounts}")
+        logger.info(f"通知渠道配置来源: {', '.join(notification_sources)}")
+        logger.info(f"每个渠道最大账号数: {max_accounts}")
     else:
-        print("未配置任何通知渠道")
+        logger.info("未配置任何通知渠道")
 
 
 def _validate_config(config: Dict[str, Any]) -> None:
@@ -366,10 +369,10 @@ def _validate_config(config: Dict[str, Any]) -> None:
 
     # 如果有错误，输出警告信息
     if errors:
-        print("⚠️ 配置验证警告:")
+        logger.warning("⚠️ 配置验证警告:")
         for error in errors:
-            print(f"   - {error}")
-        print("   提示：请检查配置文件 config/config.yaml")
+            logger.warning(f"   - {error}")
+        logger.warning("   提示：请检查配置文件 config/config.yaml")
 
 
 def _check_sensitive_info(config_path: str) -> None:
@@ -382,10 +385,11 @@ def _check_sensitive_info(config_path: str) -> None:
     warnings = detect_sensitive_info(config_path)
 
     if warnings:
-        print("⚠️ 安全警告:")
+        logger.warning("⚠️ 安全警告:")
         for warning in warnings:
-            print(f"   {warning}")
-        print("   提示：使用环境变量或 GitHub Secrets 来保护敏感信息")
+            logger.warning(f"   {warning}")
+        logger.warning("   提示：使用环境变量或 GitHub Secrets 来保护敏感信息")
+
 
 
 def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
@@ -410,7 +414,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     with open(config_path, "r", encoding="utf-8") as f:
         config_data = yaml.safe_load(f)
 
-    print(f"配置文件加载成功: {config_path}")
+    logger.info(f"配置文件加载成功: {config_path}")
 
     # 合并所有配置
     config = {}

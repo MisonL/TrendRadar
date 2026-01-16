@@ -31,7 +31,7 @@ class TestAsyncDataFetcher:
     async def test_fetch_data_success(self, fetcher, mock_http_client):
         """测试成功获取数据"""
         # 模拟响应
-        mock_response = AsyncMock()
+        mock_response = MagicMock()
         mock_response.text = '{"status": "success", "data": {"title": "测试新闻"}}'
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
@@ -54,7 +54,7 @@ class TestAsyncDataFetcher:
     async def test_fetch_data_retry_on_failure(self, fetcher, mock_http_client):
         """测试失败后重试"""
         # 模拟第一次失败，第二次成功
-        mock_response = AsyncMock()
+        mock_response = MagicMock()
         mock_response.text = '{"status": "success", "data": {"title": "测试新闻"}}'
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
@@ -94,10 +94,11 @@ class TestAsyncDataFetcher:
     async def test_fetch_data_invalid_status(self, fetcher, mock_http_client):
         """测试响应状态无效"""
         # 模拟响应状态为失败
-        mock_response = AsyncMock()
+        mock_response = MagicMock()
         mock_response.text = '{"status": "error", "message": "请求失败"}'
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
+        mock_response.json = MagicMock(return_value={"status": "error", "message": "请求失败"})
 
         mock_http_client.get = AsyncMock(return_value=mock_response)
 
@@ -141,7 +142,7 @@ async def test_concurrent_fetch():
     ]
 
     # 模拟响应
-    mock_response = AsyncMock()
+    mock_response = MagicMock()
     mock_response.text = '{"status": "success", "data": {"title": "测试新闻"}}'
     mock_response.status_code = 200
     mock_response.raise_for_status = MagicMock()
@@ -149,7 +150,11 @@ async def test_concurrent_fetch():
     with patch('trendradar.crawler.fetcher.httpx.AsyncClient') as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client_class.return_value.__aenter__.return_value = mock_client
+        
+        # 正确模拟异步上下文管理器
+        mock_instance = mock_client_class.return_value
+        mock_instance.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_instance.__aexit__ = AsyncMock(return_value=None)
 
         # 执行并发获取
         results = []

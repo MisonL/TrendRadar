@@ -144,11 +144,11 @@ class LLMService(LLMServiceInterface):
                     return batch_result
                     
                 except json.JSONDecodeError:
-                    print(f"[LLM] JSON 解析失败: {content[:100]}...")
+                    self.logger.error(f"[LLM] JSON 解析失败: {content[:100]}...")
                     return {t: 5.0 for t in batch_titles}
 
         except Exception as e:
-            print(f"[LLM] 请求失败: {e}")
+            self.logger.error(f"[LLM] 请求失败: {e}")
             return {t: 5.0 for t in batch_titles}
 
     async def filter_titles_by_score(

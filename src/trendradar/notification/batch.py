@@ -1,11 +1,8 @@
-# coding=utf-8
-"""
-批次处理模块
-
-提供消息分批发送的辅助函数
-"""
-
+import logging
 from typing import List
+
+
+logger = logging.getLogger("TrendRadar.Notification.Batch")
 
 
 def get_batch_header(format_type: str, batch_num: int, total_batches: int) -> str:
@@ -105,7 +102,7 @@ def add_batch_headers(
 
         # 如果超出，截断到安全大小
         if content_size > max_content_size:
-            print(
+            logger.info(
                 f"警告：{format_type} 第 {i}/{total} 批次内容({content_size}字节) + 头部({header_size}字节) 超出限制({max_bytes}字节)，截断到 {max_content_size} 字节"
             )
             content = truncate_to_bytes(content, max_content_size)

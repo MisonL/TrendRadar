@@ -15,6 +15,7 @@
 每个发送函数都支持分批发送，并通过参数化配置实现与 CONFIG 的解耦。
 """
 
+import logging
 import smtplib
 import time
 from abc import ABC, abstractmethod
@@ -121,7 +122,7 @@ class ChannelSender(ABC):
             batches = self._prepare_batches()
             return self._send_batches(batches)
         except Exception as e:
-            print(f"{self.log_prefix}发送异常: {e}")
+            logging.getLogger('TrendRadar').info(f"{self.log_prefix}发送异常: {e}")
             return False
     
     def _prepare_batches(self) -> list:
@@ -140,11 +141,11 @@ class ChannelSender(ABC):
     
     def _send_batches(self, batches: list) -> bool:
         """发送批次"""
-        print(f"{self.log_prefix}消息分为 {len(batches)} 批次发送 [{self.config.report_type}]")
+        logging.getLogger('TrendRadar').info(f"{self.log_prefix}消息分为 {len(batches)} 批次发送 [{self.config.report_type}]")
         
         for i, batch_content in enumerate(batches, 1):
             content_size = len(batch_content.encode("utf-8"))
-            print(f"发送{self.log_prefix}第 {i}/{len(batches)} 批次，大小：{content_size} 字节 [{self.config.report_type}]")
+            logging.getLogger('TrendRadar').info(f"发送{self.log_prefix}第 {i}/{len(batches)} 批次，大小：{content_size} 字节 [{self.config.report_type}]")
             
             payload = self._build_payload(batch_content)
             
@@ -152,19 +153,19 @@ class ChannelSender(ABC):
                 response = self._send_with_retry(payload)
                 
                 if response.status_code == 200 and self._check_success(response):
-                    print(f"{self.log_prefix}第 {i}/{len(batches)} 批次发送成功 [{self.config.report_type}]")
+                    logging.getLogger('TrendRadar').info(f"{self.log_prefix}第 {i}/{len(batches)} 批次发送成功 [{self.config.report_type}]")
                     
                     if i < len(batches):
                         time.sleep(self.config.batch_interval)
                 else:
-                    print(f"{self.log_prefix}第 {i}/{len(batches)} 批次发送失败 [{self.config.report_type}]")
+                    logging.getLogger('TrendRadar').info(f"{self.log_prefix}第 {i}/{len(batches)} 批次发送失败 [{self.config.report_type}]")
                     return False
                     
             except Exception as e:
-                print(f"{self.log_prefix}第 {i}/{len(batches)} 批次发送出错 [{self.config.report_type}]：{e}")
+                logging.getLogger('TrendRadar').info(f"{self.log_prefix}第 {i}/{len(batches)} 批次发送出错 [{self.config.report_type}]：{e}")
                 return False
         
-        print(f"{self.log_prefix}所有 {len(batches)} 批次发送完成 [{self.config.report_type}]")
+        logging.getLogger('TrendRadar').info(f"{self.log_prefix}所有 {len(batches)} 批次发送完成 [{self.config.report_type}]")
         return True
     
     @retry_on_exception(
@@ -288,12 +289,12 @@ def send_to_feishu(
     # 统一添加批次头部（已预留空间，不会超限）
     batches = add_batch_headers(batches, "feishu", batch_size)
 
-    print(f"{log_prefix}消息分为 {len(batches)} 批次发送 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}消息分为 {len(batches)} 批次发送 [{report_type}]")
 
     # 逐批发送
     for i, batch_content in enumerate(batches, 1):
         content_size = len(batch_content.encode("utf-8"))
-        print(
+        logging.getLogger('TrendRadar').info(
             f"发送{log_prefix}第 {i}/{len(batches)} 批次，大小：{content_size} 字节 [{report_type}]"
         )
 
@@ -320,26 +321,26 @@ def send_to_feishu(
                 result = response.json()
                 # 检查飞书的响应状态
                 if result.get("StatusCode") == 0 or result.get("code") == 0:
-                    print(f"{log_prefix}第 {i}/{len(batches)} 批次发送成功 [{report_type}]")
+                    logging.getLogger('TrendRadar').info(f"{log_prefix}第 {i}/{len(batches)} 批次发送成功 [{report_type}]")
                     # 批次间间隔
                     if i < len(batches):
                         time.sleep(batch_interval)
                 else:
                     error_msg = result.get("msg") or result.get("StatusMessage", "未知错误")
-                    print(
+                    logging.getLogger('TrendRadar').info(
                         f"{log_prefix}第 {i}/{len(batches)} 批次发送失败 [{report_type}]，错误：{error_msg}"
                     )
                     return False
             else:
-                print(
+                logging.getLogger('TrendRadar').info(
                     f"{log_prefix}第 {i}/{len(batches)} 批次发送失败 [{report_type}]，状态码：{response.status_code}"
                 )
                 return False
         except Exception as e:
-            print(f"{log_prefix}第 {i}/{len(batches)} 批次发送出错 [{report_type}]：{e}")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {i}/{len(batches)} 批次发送出错 [{report_type}]：{e}")
             return False
 
-    print(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
     return True
 
 
@@ -402,12 +403,12 @@ def send_to_dingtalk(
     # 统一添加批次头部（已预留空间，不会超限）
     batches = add_batch_headers(batches, "dingtalk", batch_size)
 
-    print(f"{log_prefix}消息分为 {len(batches)} 批次发送 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}消息分为 {len(batches)} 批次发送 [{report_type}]")
 
     # 逐批发送
     for i, batch_content in enumerate(batches, 1):
         content_size = len(batch_content.encode("utf-8"))
-        print(
+        logging.getLogger('TrendRadar').info(
             f"发送{log_prefix}第 {i}/{len(batches)} 批次，大小：{content_size} 字节 [{report_type}]"
         )
 
@@ -430,25 +431,25 @@ def send_to_dingtalk(
             if response.status_code == 200:
                 result = response.json()
                 if result.get("errcode") == 0:
-                    print(f"{log_prefix}第 {i}/{len(batches)} 批次发送成功 [{report_type}]")
+                    logging.getLogger('TrendRadar').info(f"{log_prefix}第 {i}/{len(batches)} 批次发送成功 [{report_type}]")
                     # 批次间间隔
                     if i < len(batches):
                         time.sleep(batch_interval)
                 else:
-                    print(
+                    logging.getLogger('TrendRadar').info(
                         f"{log_prefix}第 {i}/{len(batches)} 批次发送失败 [{report_type}]，错误：{result.get('errmsg')}"
                     )
                     return False
             else:
-                print(
+                logging.getLogger('TrendRadar').info(
                     f"{log_prefix}第 {i}/{len(batches)} 批次发送失败 [{report_type}]，状态码：{response.status_code}"
                 )
                 return False
         except Exception as e:
-            print(f"{log_prefix}第 {i}/{len(batches)} 批次发送出错 [{report_type}]：{e}")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {i}/{len(batches)} 批次发送出错 [{report_type}]：{e}")
             return False
 
-    print(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
     return True
 
 
@@ -503,9 +504,9 @@ def send_to_wework(
     is_card_mode = msg_type == "textcard"
 
     if is_text_mode:
-        print(f"{log_prefix}使用 text 格式（个人微信模式）[{report_type}]")
+        logging.getLogger('TrendRadar').info(f"{log_prefix}使用 text 格式（个人微信模式）[{report_type}]")
     else:
-        print(f"{log_prefix}使用 markdown 格式（群机器人模式）[{report_type}]")
+        logging.getLogger('TrendRadar').info(f"{log_prefix}使用 markdown 格式（群机器人模式）[{report_type}]")
 
     # text 模式使用 wework_text，markdown 模式使用 wework
     header_format_type = "wework_text" if is_text_mode else "wework"
@@ -521,13 +522,13 @@ def send_to_wework(
     # 统一添加批次头部（已预留空间，不会超限）
     batches = add_batch_headers(batches, header_format_type, batch_size)
 
-    print(f"{log_prefix}消息分为 {len(batches)} 批次发送 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}消息分为 {len(batches)} 批次发送 [{report_type}]")
 
     # 逐批发送
     for i, batch_content in enumerate(batches, 1):
         # 卡片模式下，强制只发送第一批，避免刷屏
         if is_card_mode and i > 1:
-            print(f"{log_prefix}卡片模式：仅发送第一批，跳过后续 {len(batches)-1} 批次 [{report_type}]")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}卡片模式：仅发送第一批，跳过后续 {len(batches)-1} 批次 [{report_type}]")
             break
 
         # 根据消息类型构建 payload
@@ -540,7 +541,7 @@ def send_to_wework(
             # textcard 格式
             # 注意：群机器人 Webhook 不支持 textcard，如果检测到是 webhook URL，自动降级为 news (图文)
             if "webhook/send" in webhook_url:
-                print(f"{log_prefix}升级：使用 news (图文) 列表格式发送 (仿公众号样式)")
+                logging.getLogger('TrendRadar').info(f"{log_prefix}升级：使用 news (图文) 列表格式发送 (仿公众号样式)")
                 
                 card_title = report_data.get("report_title", report_type) or "TrendRadar 热点监控"
                 current_time = time.strftime("%Y-%m-%d %H:%M", time.localtime())
@@ -652,7 +653,7 @@ def send_to_wework(
             payload = {"msgtype": "markdown", "markdown": {"content": batch_content}}
             content_size = len(batch_content.encode("utf-8"))
 
-        print(
+        logging.getLogger('TrendRadar').info(
             f"发送{log_prefix}第 {i}/{len(batches)} 批次，大小：{content_size} 字节 [{report_type}]"
         )
 
@@ -663,25 +664,25 @@ def send_to_wework(
             if response.status_code == 200:
                 result = response.json()
                 if result.get("errcode") == 0:
-                    print(f"{log_prefix}第 {i}/{len(batches)} 批次发送成功 [{report_type}]")
+                    logging.getLogger('TrendRadar').info(f"{log_prefix}第 {i}/{len(batches)} 批次发送成功 [{report_type}]")
                     # 批次间间隔
                     if i < len(batches):
                         time.sleep(batch_interval)
                 else:
-                    print(
+                    logging.getLogger('TrendRadar').info(
                         f"{log_prefix}第 {i}/{len(batches)} 批次发送失败 [{report_type}]，错误：{result.get('errmsg')}"
                     )
                     return False
             else:
-                print(
+                logging.getLogger('TrendRadar').info(
                     f"{log_prefix}第 {i}/{len(batches)} 批次发送失败 [{report_type}]，状态码：{response.status_code}"
                 )
                 return False
         except Exception as e:
-            print(f"{log_prefix}第 {i}/{len(batches)} 批次发送出错 [{report_type}]：{e}")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {i}/{len(batches)} 批次发送出错 [{report_type}]：{e}")
             return False
 
-    print(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
     return True
 
 
@@ -744,12 +745,12 @@ def send_to_telegram(
     # 统一添加批次头部（已预留空间，不会超限）
     batches = add_batch_headers(batches, "telegram", batch_size)
 
-    print(f"{log_prefix}消息分为 {len(batches)} 批次发送 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}消息分为 {len(batches)} 批次发送 [{report_type}]")
 
     # 逐批发送
     for i, batch_content in enumerate(batches, 1):
         content_size = len(batch_content.encode("utf-8"))
-        print(
+        logging.getLogger('TrendRadar').info(
             f"发送{log_prefix}第 {i}/{len(batches)} 批次，大小：{content_size} 字节 [{report_type}]"
         )
 
@@ -767,25 +768,25 @@ def send_to_telegram(
             if response.status_code == 200:
                 result = response.json()
                 if result.get("ok"):
-                    print(f"{log_prefix}第 {i}/{len(batches)} 批次发送成功 [{report_type}]")
+                    logging.getLogger('TrendRadar').info(f"{log_prefix}第 {i}/{len(batches)} 批次发送成功 [{report_type}]")
                     # 批次间间隔
                     if i < len(batches):
                         time.sleep(batch_interval)
                 else:
-                    print(
+                    logging.getLogger('TrendRadar').info(
                         f"{log_prefix}第 {i}/{len(batches)} 批次发送失败 [{report_type}]，错误：{result.get('description')}"
                     )
                     return False
             else:
-                print(
+                logging.getLogger('TrendRadar').info(
                     f"{log_prefix}第 {i}/{len(batches)} 批次发送失败 [{report_type}]，状态码：{response.status_code}"
                 )
                 return False
         except Exception as e:
-            print(f"{log_prefix}第 {i}/{len(batches)} 批次发送出错 [{report_type}]：{e}")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {i}/{len(batches)} 批次发送出错 [{report_type}]：{e}")
             return False
 
-    print(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
     return True
 
 
@@ -820,10 +821,10 @@ def send_to_email(
     """
     try:
         if not html_file_path or not Path(html_file_path).exists():
-            print(f"错误：HTML文件不存在或未提供: {html_file_path}")
+            logging.getLogger('TrendRadar').info(f"错误：HTML文件不存在或未提供: {html_file_path}")
             return False
 
-        print(f"使用HTML文件: {html_file_path}")
+        logging.getLogger('TrendRadar').info(f"使用HTML文件: {html_file_path}")
         with open(html_file_path, "r", encoding="utf-8") as f:
             html_content = f.read()
 
@@ -848,7 +849,7 @@ def send_to_email(
             smtp_port = config["port"]
             use_tls = config["encryption"] == "TLS"
         else:
-            print(f"未识别的邮箱服务商: {domain}，使用通用 SMTP 配置")
+            logging.getLogger('TrendRadar').info(f"未识别的邮箱服务商: {domain}，使用通用 SMTP 配置")
             smtp_server = f"smtp.{domain}"
             smtp_port = 587
             use_tls = True
@@ -900,9 +901,9 @@ TrendRadar 热点分析报告
         html_part = MIMEText(html_content, "html", "utf-8")
         msg.attach(html_part)
 
-        print(f"正在发送邮件到 {to_email}...")
-        print(f"SMTP 服务器: {smtp_server}:{smtp_port}")
-        print(f"发件人: {from_email}")
+        logging.getLogger('TrendRadar').info(f"正在发送邮件到 {to_email}...")
+        logging.getLogger('TrendRadar').info(f"SMTP 服务器: {smtp_server}:{smtp_port}")
+        logging.getLogger('TrendRadar').info(f"发件人: {from_email}")
 
         try:
             if use_tls:
@@ -925,32 +926,32 @@ TrendRadar 热点分析报告
             server.send_message(msg)
             server.quit()
 
-            print(f"邮件发送成功 [{report_type}] -> {to_email}")
+            logging.getLogger('TrendRadar').info(f"邮件发送成功 [{report_type}] -> {to_email}")
             return True
 
         except smtplib.SMTPServerDisconnected:
-            print("邮件发送失败：服务器意外断开连接，请检查网络或稍后重试")
+            logging.getLogger('TrendRadar').info("邮件发送失败：服务器意外断开连接，请检查网络或稍后重试")
             return False
 
     except smtplib.SMTPAuthenticationError as e:
-        print("邮件发送失败：认证错误，请检查邮箱和密码/授权码")
-        print(f"详细错误: {str(e)}")
+        logging.getLogger('TrendRadar').info("邮件发送失败：认证错误，请检查邮箱和密码/授权码")
+        logging.getLogger('TrendRadar').info(f"详细错误: {str(e)}")
         return False
     except smtplib.SMTPRecipientsRefused as e:
-        print(f"邮件发送失败：收件人地址被拒绝 {e}")
+        logging.getLogger('TrendRadar').info(f"邮件发送失败：收件人地址被拒绝 {e}")
         return False
     except smtplib.SMTPSenderRefused as e:
-        print(f"邮件发送失败：发件人地址被拒绝 {e}")
+        logging.getLogger('TrendRadar').info(f"邮件发送失败：发件人地址被拒绝 {e}")
         return False
     except smtplib.SMTPDataError as e:
-        print(f"邮件发送失败：邮件数据错误 {e}")
+        logging.getLogger('TrendRadar').info(f"邮件发送失败：邮件数据错误 {e}")
         return False
     except smtplib.SMTPConnectError as e:
-        print(f"邮件发送失败：无法连接到 SMTP 服务器 {smtp_server}:{smtp_port}")
-        print(f"详细错误: {str(e)}")
+        logging.getLogger('TrendRadar').info(f"邮件发送失败：无法连接到 SMTP 服务器 {smtp_server}:{smtp_port}")
+        logging.getLogger('TrendRadar').info(f"详细错误: {str(e)}")
         return False
     except Exception as e:
-        print(f"邮件发送失败 [{report_type}]：{e}")
+        logging.getLogger('TrendRadar').info(f"邮件发送失败 [{report_type}]：{e}")
         import traceback
         traceback.print_exc()
         return False
@@ -1040,13 +1041,13 @@ def send_to_ntfy(
     batches = add_batch_headers(batches, "ntfy", batch_size)
 
     total_batches = len(batches)
-    print(f"{log_prefix}消息分为 {total_batches} 批次发送 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}消息分为 {total_batches} 批次发送 [{report_type}]")
 
     # 反转批次顺序，使得在ntfy客户端显示时顺序正确
     # ntfy显示最新消息在上面，所以我们从最后一批开始推送
     reversed_batches = list(reversed(batches))
 
-    print(f"{log_prefix}将按反向顺序推送（最后批次先推送），确保客户端显示顺序正确")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}将按反向顺序推送（最后批次先推送），确保客户端显示顺序正确")
 
     # 逐批发送（反向顺序）
     success_count = 0
@@ -1055,13 +1056,13 @@ def send_to_ntfy(
         actual_batch_num = total_batches - idx + 1
 
         content_size = len(batch_content.encode("utf-8"))
-        print(
+        logging.getLogger('TrendRadar').info(
             f"发送{log_prefix}第 {actual_batch_num}/{total_batches} 批次（推送顺序: {idx}/{total_batches}），大小：{content_size} 字节 [{report_type}]"
         )
 
         # 检查消息大小，确保不超过4KB
         if content_size > 4096:
-            print(f"警告：{log_prefix}第 {actual_batch_num} 批次消息过大（{content_size} 字节），可能被拒绝")
+            logging.getLogger('TrendRadar').info(f"警告：{log_prefix}第 {actual_batch_num} 批次消息过大（{content_size} 字节），可能被拒绝")
 
         # 更新 headers 的批次标识
         current_headers = headers.copy()
@@ -1078,14 +1079,14 @@ def send_to_ntfy(
             )
 
             if response.status_code == 200:
-                print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送成功 [{report_type}]")
+                logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送成功 [{report_type}]")
                 success_count += 1
                 if idx < total_batches:
                     # 公共服务器建议 2-3 秒，自托管可以更短
                     interval = 2 if "ntfy.sh" in server_url else 1
                     time.sleep(interval)
             elif response.status_code == 429:
-                print(
+                logging.getLogger('TrendRadar').info(
                     f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次速率限制 [{report_type}]，等待后重试"
                 )
                 time.sleep(10)  # 等待10秒后重试
@@ -1098,43 +1099,43 @@ def send_to_ntfy(
                     timeout=30,
                 )
                 if retry_response.status_code == 200:
-                    print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次重试成功 [{report_type}]")
+                    logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次重试成功 [{report_type}]")
                     success_count += 1
                 else:
-                    print(
+                    logging.getLogger('TrendRadar').info(
                         f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次重试失败，状态码：{retry_response.status_code}"
                     )
             elif response.status_code == 413:
-                print(
+                logging.getLogger('TrendRadar').info(
                     f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次消息过大被拒绝 [{report_type}]，消息大小：{content_size} 字节"
                 )
             else:
-                print(
+                logging.getLogger('TrendRadar').info(
                     f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送失败 [{report_type}]，状态码：{response.status_code}"
                 )
                 try:
-                    print(f"错误详情：{response.text}")
+                    logging.getLogger('TrendRadar').info(f"错误详情：{response.text}")
                 except Exception:
                     pass
 
         except requests.exceptions.ConnectTimeout:
-            print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次连接超时 [{report_type}]")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次连接超时 [{report_type}]")
         except requests.exceptions.ReadTimeout:
-            print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次读取超时 [{report_type}]")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次读取超时 [{report_type}]")
         except requests.exceptions.ConnectionError as e:
-            print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次连接错误 [{report_type}]：{e}")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次连接错误 [{report_type}]：{e}")
         except Exception as e:
-            print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送异常 [{report_type}]：{e}")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送异常 [{report_type}]：{e}")
 
     # 判断整体发送是否成功
     if success_count == total_batches:
-        print(f"{log_prefix}所有 {total_batches} 批次发送完成 [{report_type}]")
+        logging.getLogger('TrendRadar').info(f"{log_prefix}所有 {total_batches} 批次发送完成 [{report_type}]")
         return True
     elif success_count > 0:
-        print(f"{log_prefix}部分发送成功：{success_count}/{total_batches} 批次 [{report_type}]")
+        logging.getLogger('TrendRadar').info(f"{log_prefix}部分发送成功：{success_count}/{total_batches} 批次 [{report_type}]")
         return True  # 部分成功也视为成功
     else:
-        print(f"{log_prefix}发送完全失败 [{report_type}]")
+        logging.getLogger('TrendRadar').info(f"{log_prefix}发送完全失败 [{report_type}]")
         return False
 
 
@@ -1187,7 +1188,7 @@ def send_to_bark(
     device_key = parsed_url.path.strip('/').split('/')[0] if parsed_url.path else None
 
     if not device_key:
-        print(f"{log_prefix} URL 格式错误，无法提取 device_key: {bark_url}")
+        logging.getLogger('TrendRadar').info(f"{log_prefix} URL 格式错误，无法提取 device_key: {bark_url}")
         return False
 
     # 构建正确的 API 端点
@@ -1205,13 +1206,13 @@ def send_to_bark(
     batches = add_batch_headers(batches, "bark", batch_size)
 
     total_batches = len(batches)
-    print(f"{log_prefix}消息分为 {total_batches} 批次发送 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}消息分为 {total_batches} 批次发送 [{report_type}]")
 
     # 反转批次顺序，使得在Bark客户端显示时顺序正确
     # Bark显示最新消息在上面，所以我们从最后一批开始推送
     reversed_batches = list(reversed(batches))
 
-    print(f"{log_prefix}将按反向顺序推送（最后批次先推送），确保客户端显示顺序正确")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}将按反向顺序推送（最后批次先推送），确保客户端显示顺序正确")
 
     # 逐批发送（反向顺序）
     success_count = 0
@@ -1220,13 +1221,13 @@ def send_to_bark(
         actual_batch_num = total_batches - idx + 1
 
         content_size = len(batch_content.encode("utf-8"))
-        print(
+        logging.getLogger('TrendRadar').info(
             f"发送{log_prefix}第 {actual_batch_num}/{total_batches} 批次（推送顺序: {idx}/{total_batches}），大小：{content_size} 字节 [{report_type}]"
         )
 
         # 检查消息大小（Bark使用APNs，限制4KB）
         if content_size > 4096:
-            print(
+            logging.getLogger('TrendRadar').info(
                 f"警告：{log_prefix}第 {actual_batch_num}/{total_batches} 批次消息过大（{content_size} 字节），可能被拒绝"
             )
 
@@ -1251,42 +1252,42 @@ def send_to_bark(
             if response.status_code == 200:
                 result = response.json()
                 if result.get("code") == 200:
-                    print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送成功 [{report_type}]")
+                    logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送成功 [{report_type}]")
                     success_count += 1
                     # 批次间间隔
                     if idx < total_batches:
                         time.sleep(batch_interval)
                 else:
-                    print(
+                    logging.getLogger('TrendRadar').info(
                         f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送失败 [{report_type}]，错误：{result.get('message', '未知错误')}"
                     )
             else:
-                print(
+                logging.getLogger('TrendRadar').info(
                     f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送失败 [{report_type}]，状态码：{response.status_code}"
                 )
                 try:
-                    print(f"错误详情：{response.text}")
+                    logging.getLogger('TrendRadar').info(f"错误详情：{response.text}")
                 except Exception:
                     pass
 
         except requests.exceptions.ConnectTimeout:
-            print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次连接超时 [{report_type}]")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次连接超时 [{report_type}]")
         except requests.exceptions.ReadTimeout:
-            print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次读取超时 [{report_type}]")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次读取超时 [{report_type}]")
         except requests.exceptions.ConnectionError as e:
-            print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次连接错误 [{report_type}]：{e}")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次连接错误 [{report_type}]：{e}")
         except Exception as e:
-            print(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送异常 [{report_type}]：{e}")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {actual_batch_num}/{total_batches} 批次发送异常 [{report_type}]：{e}")
 
     # 判断整体发送是否成功
     if success_count == total_batches:
-        print(f"{log_prefix}所有 {total_batches} 批次发送完成 [{report_type}]")
+        logging.getLogger('TrendRadar').info(f"{log_prefix}所有 {total_batches} 批次发送完成 [{report_type}]")
         return True
     elif success_count > 0:
-        print(f"{log_prefix}部分发送成功：{success_count}/{total_batches} 批次 [{report_type}]")
+        logging.getLogger('TrendRadar').info(f"{log_prefix}部分发送成功：{success_count}/{total_batches} 批次 [{report_type}]")
         return True  # 部分成功也视为成功
     else:
-        print(f"{log_prefix}发送完全失败 [{report_type}]")
+        logging.getLogger('TrendRadar').info(f"{log_prefix}发送完全失败 [{report_type}]")
         return False
 
 
@@ -1345,7 +1346,7 @@ def send_to_slack(
     # 统一添加批次头部（已预留空间，不会超限）
     batches = add_batch_headers(batches, "slack", batch_size)
 
-    print(f"{log_prefix}消息分为 {len(batches)} 批次发送 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}消息分为 {len(batches)} 批次发送 [{report_type}]")
 
     # 逐批发送
     for i, batch_content in enumerate(batches, 1):
@@ -1353,7 +1354,7 @@ def send_to_slack(
         mrkdwn_content = convert_markdown_to_mrkdwn(batch_content)
 
         content_size = len(mrkdwn_content.encode("utf-8"))
-        print(
+        logging.getLogger('TrendRadar').info(
             f"发送{log_prefix}第 {i}/{len(batches)} 批次，大小：{content_size} 字节 [{report_type}]"
         )
 
@@ -1367,19 +1368,19 @@ def send_to_slack(
 
             # Slack Incoming Webhooks 成功时返回 "ok" 文本
             if response.status_code == 200 and response.text == "ok":
-                print(f"{log_prefix}第 {i}/{len(batches)} 批次发送成功 [{report_type}]")
+                logging.getLogger('TrendRadar').info(f"{log_prefix}第 {i}/{len(batches)} 批次发送成功 [{report_type}]")
                 # 批次间间隔
                 if i < len(batches):
                     time.sleep(batch_interval)
             else:
                 error_msg = response.text if response.text else f"状态码：{response.status_code}"
-                print(
+                logging.getLogger('TrendRadar').info(
                     f"{log_prefix}第 {i}/{len(batches)} 批次发送失败 [{report_type}]，错误：{error_msg}"
                 )
                 return False
         except Exception as e:
-            print(f"{log_prefix}第 {i}/{len(batches)} 批次发送出错 [{report_type}]：{e}")
+            logging.getLogger('TrendRadar').info(f"{log_prefix}第 {i}/{len(batches)} 批次发送出错 [{report_type}]：{e}")
             return False
 
-    print(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
+    logging.getLogger('TrendRadar').info(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
     return True
