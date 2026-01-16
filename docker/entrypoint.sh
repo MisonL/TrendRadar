@@ -28,7 +28,18 @@ case "${RUN_MODE:-cron}" in
     ;;
 "cron")
     # 生成 crontab
-    echo "${CRON_SCHEDULE:-*/30 * * * *} cd /app && python -m trendradar" > /tmp/crontab
+    # 生成 crontab
+    rm -f /tmp/crontab
+    # 支持使用 ; 分隔多个定时任务表达式
+    IFS=';' read -ra SCHEDULES <<< "${CRON_SCHEDULE:-*/30 * * * *}"
+    for schedule in "${SCHEDULES[@]}"; do
+        # 去除首尾空白
+        schedule=$(echo "$schedule" | xargs)
+        if [ -n "$schedule" ]; then
+            echo "$schedule cd /app && python -m trendradar" >> /tmp/crontab
+        fi
+    done
+
     
     echo "📅 生成的crontab内容:"
     cat /tmp/crontab

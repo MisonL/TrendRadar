@@ -51,31 +51,32 @@ def render_html_content(
         <title>""" + report_title + """</title>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
         <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
             * { box-sizing: border-box; }
             body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
                 margin: 0;
-                padding: 16px;
-                background: #fafafa;
-                color: #333;
-                line-height: 1.5;
+                padding: 24px 16px;
+                background-color: #f3f4f6;
+                color: #1f2937;
+                line-height: 1.6;
             }
 
             .container {
-                max-width: 600px;
+                max-width: 640px;
                 margin: 0 auto;
-                background: white;
-                border-radius: 12px;
-                overflow: hidden;
-                box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+                background: transparent;
             }
 
             .header {
-                background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+                background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
                 color: white;
-                padding: 32px 24px;
+                padding: 48px 32px;
                 text-align: center;
                 position: relative;
+                border-radius: 20px 20px 0 0;
+                box-shadow: 0 4px 20px -5px rgba(99, 102, 241, 0.4);
             }
 
             .save-buttons {
@@ -87,46 +88,41 @@ def render_html_content(
             }
 
             .save-btn {
-                background: rgba(255, 255, 255, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background: rgba(255, 255, 255, 0.15);
+                border: 1px solid rgba(255, 255, 255, 0.2);
                 color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
+                padding: 6px 12px;
+                border-radius: 8px;
                 cursor: pointer;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: 500;
                 transition: all 0.2s ease;
-                backdrop-filter: blur(10px);
+                backdrop-filter: blur(8px);
                 white-space: nowrap;
             }
 
             .save-btn:hover {
-                background: rgba(255, 255, 255, 0.3);
-                border-color: rgba(255, 255, 255, 0.5);
+                background: rgba(255, 255, 255, 0.25);
                 transform: translateY(-1px);
             }
 
-            .save-btn:active {
-                transform: translateY(0);
-            }
-
-            .save-btn:disabled {
-                opacity: 0.6;
-                cursor: not-allowed;
-            }
-
             .header-title {
-                font-size: 22px;
-                font-weight: 700;
-                margin: 0 0 20px 0;
+                font-size: 26px;
+                font-weight: 800;
+                margin: 0 0 28px 0;
+                letter-spacing: -0.02em;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
 
             .header-info {
                 display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 16px;
-                font-size: 14px;
-                opacity: 0.95;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 12px;
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(12px);
+                padding: 16px;
+                border-radius: 16px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
             }
 
             .info-item {
@@ -135,463 +131,297 @@ def render_html_content(
 
             .info-label {
                 display: block;
-                font-size: 12px;
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
                 opacity: 0.8;
                 margin-bottom: 4px;
+                font-weight: 600;
             }
 
             .info-value {
-                font-weight: 600;
-                font-size: 16px;
+                font-weight: 700;
+                font-size: 15px;
             }
 
             .content {
-                padding: 24px;
+                padding: 0;
+                margin-top: 24px;
+                position: relative;
+                z-index: 10;
             }
 
             .word-group {
-                margin-bottom: 40px;
+                margin-bottom: 32px;
             }
 
-            .word-group:first-child {
-                margin-top: 0;
-            }
-
-            .word-header {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                margin-bottom: 20px;
-                padding-bottom: 8px;
-                border-bottom: 1px solid #f0f0f0;
-            }
-
-            .word-info {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }
-
-            .word-name {
-                font-size: 17px;
-                font-weight: 600;
-                color: #1a1a1a;
-            }
-
-            .word-count {
-                color: #666;
-                font-size: 13px;
-                font-weight: 500;
-            }
-
-            .word-count.hot { color: #dc2626; font-weight: 600; }
-            .word-count.warm { color: #ea580c; font-weight: 600; }
-
-            .word-index {
-                color: #999;
-                font-size: 12px;
-            }
-
-            .news-item {
-                margin-bottom: 20px;
-                padding: 16px 0;
-                border-bottom: 1px solid #f5f5f5;
-                position: relative;
-                display: flex;
-                gap: 12px;
-                align-items: center;
-            }
-
-            .news-item:last-child {
-                border-bottom: none;
-            }
-
-            .news-item.new::after {
-                content: "NEW";
-                position: absolute;
-                top: 12px;
-                right: 0;
-                background: #fbbf24;
-                color: #92400e;
-                font-size: 9px;
+            .section-label {
+                padding: 0 16px;
+                margin-bottom: 16px;
                 font-weight: 700;
-                padding: 3px 6px;
-                border-radius: 4px;
-                letter-spacing: 0.5px;
-            }
-
-            .news-number {
-                color: #999;
-                font-size: 13px;
-                font-weight: 600;
-                min-width: 20px;
-                text-align: center;
-                flex-shrink: 0;
-                background: #f8f9fa;
-                border-radius: 50%;
-                width: 24px;
-                height: 24px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                align-self: flex-start;
-                margin-top: 8px;
-            }
-
-            .news-content {
-                flex: 1;
-                min-width: 0;
-                padding-right: 40px;
-            }
-
-            .news-item.new .news-content {
-                padding-right: 50px;
-            }
-
-            .news-header {
+                font-size: 14px;
+                color: #6b7280;
                 display: flex;
                 align-items: center;
                 gap: 8px;
+            }
+
+            .section-label::before {
+                content: "";
+                display: block;
+                width: 4px;
+                height: 16px;
+                background: #6366f1;
+                border-radius: 2px;
+            }
+
+            .word-header {
+                background: white;
+                margin: 0 0 12px 0;
+                padding: 16px 20px;
+                border-radius: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            }
+
+            .word-name {
+                font-size: 18px;
+                font-weight: 700;
+                color: #111827;
+                background: linear-gradient(to right, #111827, #6b7280);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+
+            .word-count-badge {
+                background: #f3f4f6;
+                color: #4b5563;
+                padding: 4px 10px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+
+            .word-count-badge.hot { background: #fee2e2; color: #dc2626; }
+            .word-count-badge.warm { background: #ffedd5; color: #ea580c; }
+
+            .news-card {
+                background: white;
+                margin-bottom: 12px;
+                padding: 20px;
+                border-radius: 16px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                display: flex;
+                gap: 16px;
+                text-decoration: none;
+                color: inherit;
+                position: relative;
+                border: 1px solid transparent;
+            }
+
+            .news-card:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                border-color: #e5e7eb;
+            }
+
+            .news-card.new::before {
+                content: "NEW";
+                position: absolute;
+                top: -8px;
+                right: 20px;
+                background: #facc15;
+                color: #854d0e;
+                font-size: 10px;
+                font-weight: 800;
+                padding: 2px 8px;
+                border-radius: 6px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+
+            .news-rank-circle {
+                width: 38px;
+                height: 38px;
+                border-radius: 12px;
+                background: #f8fafc;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px;
+                font-weight: 700;
+                color: #64748b;
+                flex-shrink: 0;
+            }
+
+            .news-rank-circle.top { background: #ef4444; color: white; }
+            .news-rank-circle.high { background: #f97316; color: white; }
+
+            .news-body {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .news-tags {
+                display: flex;
+                gap: 6px;
                 margin-bottom: 8px;
                 flex-wrap: wrap;
             }
 
-            .source-name {
-                color: #666;
-                font-size: 12px;
-                font-weight: 500;
-            }
-
-            .keyword-tag {
-                color: #2563eb;
-                font-size: 12px;
-                font-weight: 500;
-                background: #eff6ff;
-                padding: 2px 6px;
-                border-radius: 4px;
-            }
-
-            .rank-num {
-                color: #fff;
-                background: #6b7280;
-                font-size: 10px;
-                font-weight: 700;
-                padding: 2px 6px;
-                border-radius: 10px;
-                min-width: 18px;
-                text-align: center;
-            }
-
-            .rank-num.top { background: #dc2626; }
-            .rank-num.high { background: #ea580c; }
-
-            .time-info {
-                color: #999;
+            .badge {
                 font-size: 11px;
+                font-weight: 600;
+                padding: 2px 8px;
+                border-radius: 6px;
             }
 
-            .count-info {
-                color: #059669;
-                font-size: 11px;
-                font-weight: 500;
-            }
+            .badge-source { background: #f1f5f9; color: #475569; }
+            .badge-keyword { background: #eef2ff; color: #4f46e5; }
+            .badge-time { background: #f8fafc; color: #94a3b8; font-weight: 400; }
+            .badge-count { background: #ecfdf5; color: #059669; }
 
-            .news-title {
-                font-size: 15px;
-                line-height: 1.4;
-                color: #1a1a1a;
-                margin: 0;
-            }
-
-            .news-link {
-                color: #2563eb;
-                text-decoration: none;
-            }
-
-            .news-link:hover {
-                text-decoration: underline;
-            }
-
-            .news-link:visited {
-                color: #7c3aed;
-            }
-
-            .new-section {
-                margin-top: 40px;
-                padding-top: 24px;
-                border-top: 2px solid #f0f0f0;
-            }
-
-            .new-section-title {
-                color: #1a1a1a;
+            .news-title-text {
                 font-size: 16px;
                 font-weight: 600;
-                margin: 0 0 20px 0;
-            }
-
-            .new-source-group {
-                margin-bottom: 24px;
-            }
-
-            .new-source-title {
-                color: #666;
-                font-size: 13px;
-                font-weight: 500;
-                margin: 0 0 12px 0;
-                padding-bottom: 6px;
-                border-bottom: 1px solid #f5f5f5;
-            }
-
-            .new-item {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                padding: 8px 0;
-                border-bottom: 1px solid #f9f9f9;
-            }
-
-            .new-item:last-child {
-                border-bottom: none;
-            }
-
-            .new-item-number {
-                color: #999;
-                font-size: 12px;
-                font-weight: 600;
-                min-width: 18px;
-                text-align: center;
-                flex-shrink: 0;
-                background: #f8f9fa;
-                border-radius: 50%;
-                width: 20px;
-                height: 20px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-
-            .new-item-rank {
-                color: #fff;
-                background: #6b7280;
-                font-size: 10px;
-                font-weight: 700;
-                padding: 3px 6px;
-                border-radius: 8px;
-                min-width: 20px;
-                text-align: center;
-                flex-shrink: 0;
-            }
-
-            .new-item-rank.top { background: #dc2626; }
-            .new-item-rank.high { background: #ea580c; }
-
-            .new-item-content {
-                flex: 1;
-                min-width: 0;
-            }
-
-            .new-item-title {
-                font-size: 14px;
-                line-height: 1.4;
-                color: #1a1a1a;
+                color: #111827;
+                line-height: 1.5;
                 margin: 0;
+                display: block;
             }
 
-            .error-section {
-                background: #fef2f2;
-                border: 1px solid #fecaca;
-                border-radius: 8px;
-                padding: 16px;
-                margin-bottom: 24px;
-            }
-
-            .error-title {
-                color: #dc2626;
-                font-size: 14px;
-                font-weight: 600;
-                margin: 0 0 8px 0;
-            }
-
-            .error-list {
-                list-style: none;
-                padding: 0;
-                margin: 0;
-            }
-
-            .error-item {
-                color: #991b1b;
-                font-size: 13px;
-                padding: 2px 0;
-                font-family: 'SF Mono', Consolas, monospace;
-            }
-
-            .footer {
-                margin-top: 32px;
-                padding: 20px 24px;
-                background: #f8f9fa;
-                border-top: 1px solid #e5e7eb;
-                text-align: center;
-            }
-
-            .footer-content {
-                font-size: 13px;
-                color: #6b7280;
-                line-height: 1.6;
-            }
-
-            .footer-link {
+            .news-card:hover .news-title-text {
                 color: #4f46e5;
-                text-decoration: none;
-                font-weight: 500;
-                transition: color 0.2s ease;
             }
 
-            .footer-link:hover {
-                color: #7c3aed;
-                text-decoration: underline;
-            }
-
-            .project-name {
-                font-weight: 600;
-                color: #374151;
-            }
-
-            @media (max-width: 480px) {
-                body { padding: 12px; }
-                .header { padding: 24px 20px; }
-                .content { padding: 20px; }
-                .footer { padding: 16px 20px; }
-                .header-info { grid-template-columns: 1fr; gap: 12px; }
-                .news-header { gap: 6px; }
-                .news-content { padding-right: 45px; }
-                .news-item { gap: 8px; }
-                .new-item { gap: 8px; }
-                .news-number { width: 20px; height: 20px; font-size: 12px; }
-                .save-buttons {
-                    position: static;
-                    margin-bottom: 16px;
-                    display: flex;
-                    gap: 8px;
-                    justify-content: center;
-                    flex-direction: column;
-                    width: 100%;
-                }
-                .save-btn {
-                    width: 100%;
-                }
-            }
-
-            /* RSS 订阅内容样式 */
             .rss-section {
-                margin-top: 32px;
-                padding-top: 24px;
-                border-top: 2px solid #e5e7eb;
+                padding: 0 16px;
+                margin-top: 40px;
             }
 
-            .rss-section-header {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                margin-bottom: 20px;
-            }
-
-            .rss-section-title {
-                font-size: 18px;
-                font-weight: 600;
-                color: #059669;
-            }
-
-            .rss-section-count {
-                color: #6b7280;
-                font-size: 14px;
-            }
-
-            .feed-group {
-                margin-bottom: 24px;
-            }
-
-            .feed-group:last-child {
-                margin-bottom: 0;
-            }
-
-            .feed-header {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                margin-bottom: 12px;
-                padding-bottom: 8px;
-                border-bottom: 2px solid #10b981;
-            }
-
-            .feed-name {
-                font-size: 15px;
-                font-weight: 600;
-                color: #059669;
-            }
-
-            .feed-count {
-                color: #666;
-                font-size: 13px;
-                font-weight: 500;
-            }
-
-            .rss-item {
-                margin-bottom: 12px;
-                padding: 14px;
+            .rss-card {
                 background: #f0fdf4;
-                border-radius: 8px;
-                border-left: 3px solid #10b981;
+                border: 1px solid #dcfce7;
+                border-radius: 16px;
+                padding: 16px;
+                margin-bottom: 12px;
+                display: block;
+                text-decoration: none;
+                color: inherit;
+                transition: all 0.2s ease;
             }
 
-            .rss-item:last-child {
-                margin-bottom: 0;
+            .rss-card:hover {
+                background: #dcfce7;
+                transform: translateX(4px);
             }
 
             .rss-meta {
                 display: flex;
-                align-items: center;
-                gap: 12px;
-                margin-bottom: 6px;
-                flex-wrap: wrap;
-            }
-
-            .rss-time {
-                color: #6b7280;
-                font-size: 12px;
-            }
-
-            .rss-author {
+                gap: 8px;
+                margin-bottom: 8px;
+                font-size: 11px;
+                font-weight: 600;
                 color: #059669;
-                font-size: 12px;
-                font-weight: 500;
             }
 
             .rss-title {
                 font-size: 14px;
-                line-height: 1.5;
+                font-weight: 600;
+                color: #065f46;
                 margin-bottom: 6px;
-            }
-
-            .rss-link {
-                color: #1f2937;
-                text-decoration: none;
-                font-weight: 500;
-            }
-
-            .rss-link:hover {
-                color: #059669;
-                text-decoration: underline;
             }
 
             .rss-summary {
                 font-size: 13px;
-                color: #6b7280;
-                line-height: 1.5;
-                margin: 0;
+                color: #374151;
+                opacity: 0.8;
                 display: -webkit-box;
                 -webkit-line-clamp: 2;
                 -webkit-box-orient: vertical;
                 overflow: hidden;
+            }
+
+            .new-section {
+                margin-top: 48px;
+                padding: 0 16px;
+            }
+
+            .source-group {
+                margin-bottom: 24px;
+            }
+
+            .source-title {
+                font-size: 13px;
+                font-weight: 600;
+                color: #94a3b8;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .incremental-item {
+                background: white;
+                padding: 12px 16px;
+                border-radius: 12px;
+                margin-bottom: 8px;
+                font-size: 14px;
+                border: 1px solid #f1f5f9;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+
+            .inc-rank {
+                font-size: 11px;
+                font-weight: 800;
+                color: #94a3b8;
+                width: 20px;
+                text-align: center;
+            }
+
+            .error-card {
+                background: #fff1f2;
+                border: 1px solid #fecdd3;
+                padding: 16px;
+                border-radius: 12px;
+                margin: 0 16px 24px 16px;
+            }
+
+            .error-msg {
+                color: #be123c;
+                font-size: 13px;
+                margin: 4px 0;
+                font-family: monospace;
+            }
+
+            .footer {
+                margin-top: 64px;
+                padding: 40px 24px;
+                background: white;
+                border-radius: 32px 32px 0 0;
+                text-align: center;
+                box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
+            }
+
+            .footer-content { font-size: 13px; color: #64748b; }
+            .project-badge {
+                display: inline-block;
+                padding: 4px 12px;
+                background: #f1f5f9;
+                border-radius: 8px;
+                font-weight: 700;
+                color: #1e293b;
+                margin-bottom: 12px;
+            }
+
+            @media (max-width: 480px) {
+                .header-info { grid-template-columns: 1fr 1fr; }
+                .news-card { padding: 16px; gap: 12px; }
+                .news-rank-circle { width: 32px; height: 32px; font-size: 12px; border-radius: 10px; }
             }
         </style>
     </head>
@@ -661,18 +491,17 @@ def render_html_content(
     # 处理失败ID错误信息
     if report_data["failed_ids"]:
         html += """
-                <div class="error-section">
-                    <div class="error-title">⚠️ 请求失败的平台</div>
-                    <ul class="error-list">"""
+                <div class="error-card">
+                    <div style="font-weight: 700; color: #e11d48; font-size: 14px; margin-bottom: 8px;">⚠️ 以下平台抓取失败</div>"""
         for id_value in report_data["failed_ids"]:
-            html += f'<li class="error-item">{html_escape(id_value)}</li>'
+            html += f'<div class="error-msg">• {html_escape(id_value)}</div>'
         html += """
-                    </ul>
                 </div>"""
 
     # 生成热点词汇统计部分的HTML
     stats_html = ""
     if report_data["stats"]:
+        stats_html += '<div class="section-label">热点聚焦</div>'
         total_count = len(report_data["stats"])
 
         for i, stat in enumerate(report_data["stats"], 1):
@@ -690,153 +519,109 @@ def render_html_content(
 
             stats_html += f"""
                 <div class="word-group">
+
                     <div class="word-header">
-                        <div class="word-info">
-                            <div class="word-name">{escaped_word}</div>
-                            <div class="word-count {count_class}">{count} 条</div>
-                        </div>
+                        <div class="word-name">{escaped_word}</div>
                         <div class="word-index">{i}/{total_count}</div>
+                        <div class="word-count-badge {count_class}">{count} 条热议</div>
                     </div>"""
 
-            # 处理每个词组下的新闻标题，给每条新闻标上序号
+            # 处理每个词组下的新闻标题
             for j, title_data in enumerate(stat["titles"], 1):
                 is_new = title_data.get("is_new", False)
                 new_class = "new" if is_new else ""
+                
+                # 提取链接
+                link_url = title_data.get("mobile_url") or title_data.get("url", "")
+                escaped_url = html_escape(link_url) if link_url else "#"
 
-                stats_html += f"""
-                    <div class="news-item {new_class}">
-                        <div class="news-number">{j}</div>
-                        <div class="news-content">
-                            <div class="news-header">"""
-
-                # 根据 display_mode 决定显示来源还是关键词
-                if display_mode == "keyword":
-                    # keyword 模式：显示来源
-                    stats_html += f'<span class="source-name">{html_escape(title_data["source_name"])}</span>'
-                else:
-                    # platform 模式：显示关键词
-                    matched_keyword = title_data.get("matched_keyword", "")
-                    if matched_keyword:
-                        stats_html += f'<span class="keyword-tag">[{html_escape(matched_keyword)}]</span>'
-
-                # 处理排名显示
+                # 处理排名
+                rank_html = ""
                 ranks = title_data.get("ranks", [])
                 if ranks:
                     min_rank = min(ranks)
                     max_rank = max(ranks)
                     rank_threshold = title_data.get("rank_threshold", 10)
+                    rank_class = "top" if min_rank <= 3 else ("high" if min_rank <= rank_threshold else "")
+                    rank_text = str(min_rank) if min_rank == max_rank else f"{min_rank}"
+                    rank_html = f'<div class="news-rank-circle {rank_class}">{rank_text}</div>'
+                else:
+                    rank_html = f'<div class="news-rank-circle">{j}</div>'
 
-                    # 确定排名等级
-                    if min_rank <= 3:
-                        rank_class = "top"
-                    elif min_rank <= rank_threshold:
-                        rank_class = "high"
-                    else:
-                        rank_class = ""
+                stats_html += f"""
+                    <a href="{escaped_url}" target="_blank" class="news-card {new_class}">
+                        {rank_html}
+                        <div class="news-body">
+                            <div class="news-tags">"""
 
-                    if min_rank == max_rank:
-                        rank_text = str(min_rank)
-                    else:
-                        rank_text = f"{min_rank}-{max_rank}"
+                # 来源标签
+                stats_html += f'<span class="badge badge-source">{html_escape(title_data["source_name"])}</span>'
+                
+                # 关键词标签（platform模式下）
+                if display_mode != "keyword":
+                    matched_keyword = title_data.get("matched_keyword", "")
+                    if matched_keyword:
+                        stats_html += f'<span class="badge badge-keyword">{html_escape(matched_keyword)}</span>'
 
-                    stats_html += f'<span class="rank-num {rank_class}">{rank_text}</span>'
-
-                # 处理时间显示
+                # 时间标签
                 time_display = title_data.get("time_display", "")
                 if time_display:
-                    # 简化时间显示格式，将波浪线替换为~
-                    simplified_time = (
-                        time_display.replace(" ~ ", "~")
-                        .replace("[", "")
-                        .replace("]", "")
-                    )
-                    stats_html += (
-                        f'<span class="time-info">{html_escape(simplified_time)}</span>'
-                    )
-
-                # 处理出现次数
+                    simplified_time = time_display.replace(" ~ ", "~").replace("[", "").replace("]", "")
+                    stats_html += f'<span class="badge badge-time">{html_escape(simplified_time)}</span>'
+                
+                # 出现次数
                 count_info = title_data.get("count", 1)
                 if count_info > 1:
-                    stats_html += f'<span class="count-info">{count_info}次</span>'
+                    stats_html += f'<span class="badge badge-count">{count_info}次出现</span>'
 
-                stats_html += """
+                stats_html += f"""
                             </div>
-                            <div class="news-title">"""
-
-                # 处理标题和链接
-                escaped_title = html_escape(title_data["title"])
-                link_url = title_data.get("mobile_url") or title_data.get("url", "")
-
-                if link_url:
-                    escaped_url = html_escape(link_url)
-                    stats_html += f'<a href="{escaped_url}" target="_blank" class="news-link">{escaped_title}</a>'
-                else:
-                    stats_html += escaped_title
-
-                stats_html += """
-                            </div>
+                            <h3 class="news-title-text">{html_escape(title_data["title"])}</h3>
                         </div>
-                    </div>"""
+                    </a>"""
 
             stats_html += """
                 </div>"""
 
-    # 生成新增新闻区域的HTML
+    # 生成新增热点区域的HTML
     new_titles_html = ""
     if report_data["new_titles"]:
         new_titles_html += f"""
                 <div class="new-section">
-                    <div class="new-section-title">本次新增热点 (共 {report_data['total_new_count']} 条)</div>"""
+                    <div class="section-label">新增热点</div>
+                    <div class="word-header" style="margin-bottom: 24px;">
+                        <div class="word-name">本次发现 {report_data['total_new_count']} 条新动态</div>
+                    </div>"""
 
         for source_data in report_data["new_titles"]:
             escaped_source = html_escape(source_data["source_name"])
             titles_count = len(source_data["titles"])
 
             new_titles_html += f"""
-                    <div class="new-source-group">
-                        <div class="new-source-title">{escaped_source} · {titles_count}条</div>"""
+                    <div class="source-group">
+                        <div class="source-title">
+                            <span style="width: 8px; height: 8px; background: #94a3b8; border-radius: 50%; display: inline-block;"></span>
+                            {escaped_source} · {titles_count}条
+                        </div>"""
 
-            # 为新增新闻也添加序号
             for idx, title_data in enumerate(source_data["titles"], 1):
                 ranks = title_data.get("ranks", [])
-
-                # 处理新增新闻的排名显示
                 rank_class = ""
                 if ranks:
                     min_rank = min(ranks)
-                    if min_rank <= 3:
-                        rank_class = "top"
-                    elif min_rank <= title_data.get("rank_threshold", 10):
-                        rank_class = "high"
-
-                    if len(ranks) == 1:
-                        rank_text = str(ranks[0])
-                    else:
-                        rank_text = f"{min(ranks)}-{max(ranks)}"
+                    rank_class = "top" if min_rank <= 3 else ("high" if min_rank <= title_data.get("rank_threshold", 10) else "")
+                    rank_text = str(min_rank)
                 else:
-                    rank_text = "?"
+                    rank_text = "•"
+
+                link_url = title_data.get("mobile_url") or title_data.get("url", "")
+                escaped_url = html_escape(link_url) if link_url else "#"
 
                 new_titles_html += f"""
-                        <div class="new-item">
-                            <div class="new-item-number">{idx}</div>
-                            <div class="new-item-rank {rank_class}">{rank_text}</div>
-                            <div class="new-item-content">
-                                <div class="new-item-title">"""
-
-                # 处理新增新闻的链接
-                escaped_title = html_escape(title_data["title"])
-                link_url = title_data.get("mobile_url") or title_data.get("url", "")
-
-                if link_url:
-                    escaped_url = html_escape(link_url)
-                    new_titles_html += f'<a href="{escaped_url}" target="_blank" class="news-link">{escaped_title}</a>'
-                else:
-                    new_titles_html += escaped_title
-
-                new_titles_html += """
-                                </div>
-                            </div>
-                        </div>"""
+                        <a href="{escaped_url}" target="_blank" class="incremental-item" style="text-decoration: none; color: inherit;">
+                            <div class="inc-rank">{rank_text}</div>
+                            <div style="flex: 1; min-width: 0; font-weight: 500; color: #374151;">{html_escape(title_data["title"])}</div>
+                        </a>"""
 
             new_titles_html += """
                     </div>"""
@@ -880,67 +665,43 @@ def render_html_content(
 
         rss_html = f"""
                 <div class="rss-section">
-                    <div class="rss-section-header">
-                        <div class="rss-section-title">{title}</div>
-                        <div class="rss-section-count">{total_count} 条</div>
+                    <div class="section-label">{title}</div>
+                    <div class="word-header" style="margin-bottom: 24px;">
+                        <div class="word-name">集成订阅源 (共 {total_count} 条)</div>
                     </div>"""
 
-        # 按关键词分组渲染（与热榜格式一致）
         for stat in stats:
             keyword = stat.get("word", "")
             titles = stat.get("titles", [])
             if not titles:
                 continue
 
-            keyword_count = len(titles)
-
-            rss_html += f"""
-                    <div class="feed-group">
-                        <div class="feed-header">
-                            <div class="feed-name">{html_escape(keyword)}</div>
-                            <div class="feed-count">{keyword_count} 条</div>
-                        </div>"""
-
             for title_data in titles:
-                item_title = title_data.get("title", "")
-                url = title_data.get("url", "")
-                time_display = title_data.get("time_display", "")
-                source_name = title_data.get("source_name", "")
                 is_new = title_data.get("is_new", False)
+                url = title_data.get("url", "")
+                escaped_url = html_escape(url) if url else "#"
 
-                rss_html += """
-                        <div class="rss-item">
-                            <div class="rss-meta">"""
+                rss_html += f"""
+                    <a href="{escaped_url}" target="_blank" class="rss-card">
+                        <div class="rss-meta">"""
 
-                if time_display:
-                    rss_html += f'<span class="rss-time">{html_escape(time_display)}</span>'
-
-                if source_name:
-                    rss_html += f'<span class="rss-author">{html_escape(source_name)}</span>'
+                if title_data.get("source_name"):
+                    rss_html += f'<span class="badge badge-source">{html_escape(title_data["source_name"])}</span>'
+                
+                if title_data.get("time_display"):
+                    rss_html += f'<span class="badge badge-time">{html_escape(title_data["time_display"])}</span>'
 
                 if is_new:
-                    rss_html += '<span class="rss-author" style="color: #dc2626;">NEW</span>'
+                    rss_html += '<span class="badge" style="background: #facc15; color: #854d0e;">NEW</span>'
 
-                rss_html += """
-                            </div>
-                            <div class="rss-title">"""
-
-                escaped_title = html_escape(item_title)
-                if url:
-                    escaped_url = html_escape(url)
-                    rss_html += f'<a href="{escaped_url}" target="_blank" class="rss-link">{escaped_title}</a>'
-                else:
-                    rss_html += escaped_title
-
-                rss_html += """
-                            </div>
-                        </div>"""
-
-            rss_html += """
-                    </div>"""
+                rss_html += f"""
+                        </div>
+                        <div class="rss-title">{html_escape(title_data.get("title", ""))}</div>
+                    </a>"""
 
         rss_html += """
                 </div>"""
+        return rss_html
         return rss_html
 
     # 生成 RSS 统计和新增 HTML
@@ -961,10 +722,11 @@ def render_html_content(
             </div>
 
             <div class="footer">
+                <div class="project-badge">TrendRadar</div>
                 <div class="footer-content">
-                    由 <span class="project-name">TrendRadar</span> 生成 ·
+                    专业的新闻热点追踪与分析平台 · 
                     <a href="https://github.com/MisonL/TrendRadar" target="_blank" class="footer-link">
-                        GitHub 开源项目
+                        GitHub Open Source
                     </a>"""
 
     if update_info:
@@ -1063,10 +825,10 @@ def render_html_content(
                     button.disabled = true;
 
                     // 获取所有可能的分割元素
-                    const newsItems = Array.from(container.querySelectorAll('.news-item'));
+                    const newsItems = Array.from(container.querySelectorAll('.news-card'));
                     const wordGroups = Array.from(container.querySelectorAll('.word-group'));
                     const newSection = container.querySelector('.new-section');
-                    const errorSection = container.querySelector('.error-section');
+                    const errorCard = container.querySelector('.error-card');
                     const header = container.querySelector('.header');
                     const footer = container.querySelector('.footer');
 
@@ -1084,21 +846,21 @@ def render_html_content(
                     });
 
                     // 添加错误信息（如果存在）
-                    if (errorSection) {
-                        const rect = errorSection.getBoundingClientRect();
+                    if (errorCard) {
+                        const rect = errorCard.getBoundingClientRect();
                         elements.push({
                             type: 'error',
-                            element: errorSection,
+                            element: errorCard,
                             top: rect.top - containerRect.top,
                             bottom: rect.bottom - containerRect.top,
                             height: rect.height
                         });
                     }
 
-                    // 按word-group分组处理news-item
+                    // 按word-group分组处理news-card
                     wordGroups.forEach(group => {
                         const groupRect = group.getBoundingClientRect();
-                        const groupNewsItems = group.querySelectorAll('.news-item');
+                        const groupNewsItems = group.querySelectorAll('.news-card');
 
                         // 添加word-group的header部分
                         const wordHeader = group.querySelector('.word-header');
@@ -1114,7 +876,7 @@ def render_html_content(
                             });
                         }
 
-                        // 添加每个news-item
+                        // 添加每个news-card
                         groupNewsItems.forEach(item => {
                             const rect = item.getBoundingClientRect();
                             elements.push({

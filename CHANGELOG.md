@@ -7,6 +7,14 @@
 
 ## [5.0.1] - 2026-01-16
 
+### 新增 (Added)
+
+- **多定时任务支持**: `entrypoint.sh` 现支持在 `CRON_SCHEDULE` 中使用分号 (`;`) 分隔多个 Cron 表达式，允许配置不同时间点的任务。
+
+### 优化 (Improved)
+
+- **Premium 网页 UI**: 全面重构 HTML 报告样式，采用卡片式布局、Indigo-Violet 渐变 Header、毛玻璃效果及 Pill Badges 徽章系统，提升视觉层级与阅读体验。
+
 ### 修复 (Fixed)
 
 - **核心崩溃修复**: 修复了 RSS 抓取时 `rss_items` 为空导致的 `NoneType` 异常。
